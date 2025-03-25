@@ -10,8 +10,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.brickshare.screens.*
 import com.example.brickshare.viewmodel.UserViewModel
@@ -20,14 +22,29 @@ import com.example.brickshare.viewmodel.UserViewModel
 fun Navigation(userViewModel: UserViewModel = viewModel()) {
     val navController = rememberNavController()
     val userRole by userViewModel.userRole.collectAsState()
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
 
-    // Always start at welcome screen
+    // Routes where the bottom navigation bar should be visible
+    val mainAppRoutes = listOf(
+        "dashboard",
+        "browse",
+        "portfolio",
+        "income",
+        "profile",
+        "add_property"
+    )
+    val isBottomBarVisible = userRole != null && (
+            currentRoute in mainAppRoutes ||
+                    currentRoute?.startsWith("manage_property/") == true
+            )
+
     val startDestination = "welcome"
 
     Scaffold(
         bottomBar = {
             AnimatedVisibility(
-                visible = userRole != null,
+                visible = isBottomBarVisible,
                 enter = expandVertically(),
                 exit = shrinkVertically()
             ) {
@@ -40,20 +57,40 @@ fun Navigation(userViewModel: UserViewModel = viewModel()) {
             startDestination = startDestination,
             modifier = Modifier.padding(innerPadding)
         ) {
-            composable("welcome") { WelcomeScreen(navController) }
-            composable("signin") { SignInScreen(navController) }
-            composable("signup") { SignUpScreen(navController) }
-            composable("role_selection") { RoleSelectionScreen(navController, userViewModel) }
-            composable("dashboard") { DashboardScreen(navController, userViewModel) }
-            composable("browse") { BrowseScreen(navController) }
-            composable("portfolio") { PortfolioScreen(navController) }
-            composable("income") { IncomeScreen(navController) }
-            composable("profile") { ProfileScreen(navController) }
+            composable("welcome") {
+                WelcomeScreen(navController)
+            }
+            composable("signin") {
+                SignInScreen(navController)
+            }
+            composable("signup") {
+                SignUpScreen(navController)
+            }
+            composable("role_selection") {
+                RoleSelectionScreen(navController, userViewModel)
+            }
+            composable("dashboard") {
+                DashboardScreen(navController, userViewModel)
+            }
+            composable("browse") {
+                BrowseScreen(navController)
+            }
+            composable("portfolio") {
+                PortfolioScreen(navController)
+            }
+            composable("income") {
+                IncomeScreen(navController)
+            }
+            composable("profile") {
+                ProfileScreen(navController)
+            }
             composable("property_detail/{propertyId}") { backStackEntry ->
                 val propertyId = backStackEntry.arguments?.getString("propertyId") ?: ""
                 PropertyDetailScreen(navController, propertyId)
             }
-            composable("add_property") { AddPropertyScreen(navController) }
+            composable("add_property") {
+                AddPropertyScreen(navController)
+            }
             composable("manage_property/{propertyId}") { backStackEntry ->
                 val propertyId = backStackEntry.arguments?.getString("propertyId") ?: ""
                 ManagePropertyScreen(navController, propertyId)
@@ -63,5 +100,14 @@ fun Navigation(userViewModel: UserViewModel = viewModel()) {
                 BuySharesScreen(navController, propertyId)
             }
         }
+    }
+}
+
+/**
+ * Utility function to clear onboarding screens from the back stack and navigate to the main app.
+ */
+fun NavHostController.navigateToMainApp() {
+    navigate("dashboard") {
+        popUpTo("welcome") { inclusive = true }
     }
 }

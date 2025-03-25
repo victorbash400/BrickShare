@@ -38,7 +38,7 @@ android {
         compose = true
     }
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.14" // Matches Kotlin 2.0.20, commonly used with Android Studio
+        kotlinCompilerExtensionVersion = "1.5.14"
     }
 }
 
@@ -59,6 +59,7 @@ dependencies {
     implementation(libs.androidx.material3)             // Material 3 components
     implementation(libs.material3) // Latest Material 3 as of March 2025
     implementation(libs.androidx.navigation.compose) // Navigation Compose from the manual
+
 
     // ViewModel support for Compose
     implementation(libs.androidx.lifecycle.viewmodel.compose) // For ViewModel integration

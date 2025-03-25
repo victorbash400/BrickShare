@@ -9,12 +9,16 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 
 private val DarkColorScheme = darkColorScheme(
     primary = HederaGreen,
-    secondary = DeepNavy,
-    tertiary = NavyGrey,
+    secondary = HederaGreen, // Using the same green for secondary actions
+    tertiary = NavyGrey,     // Reintroduced NavyGrey for tertiary
     background = DarkBackground,
     surface = DarkSurface,
     onPrimary = BuildingBlocksWhite,
@@ -26,14 +30,14 @@ private val DarkColorScheme = darkColorScheme(
 
 private val LightColorScheme = lightColorScheme(
     primary = HederaGreen,
-    secondary = DeepNavy,
-    tertiary = NavyGrey,
+    secondary = DeepNavy,    // Using DeepNavy for secondary in light theme
+    tertiary = NavyGrey,     // Using NavyGrey for tertiary
     background = LightBackground,
     surface = LightSurface,
-    onPrimary = DeepNavy,
+    onPrimary = DeepNavy,    // DeepNavy for contrast on green in light theme
     onSecondary = BuildingBlocksWhite,
     onTertiary = DeepNavy,
-    onBackground = DeepNavy,
+    onBackground = DeepNavy, // DeepNavy for contrast on light background
     onSurface = DeepNavy
 )
 
@@ -52,9 +56,18 @@ fun BrickShareTheme(
         else -> LightColorScheme
     }
 
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as Activity).window
+            window.statusBarColor = colorScheme.background.toArgb() // Match status bar to background
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+        }
+    }
+
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography,
+        typography = Typography, // Assuming you have typography defined
         content = content
     )
 }

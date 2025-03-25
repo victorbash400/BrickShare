@@ -27,9 +27,9 @@ import androidx.navigation.NavController
 import com.example.brickshare.ui.theme.BrickShareFonts
 import com.example.brickshare.ui.theme.HederaGreen
 import com.example.brickshare.ui.theme.DeepNavy
-import com.example.brickshare.ui.theme.BuildingBlocksWhite
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.navigation.compose.rememberNavController
+import com.example.brickshare.ui.theme.BuildingBlocksWhite
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

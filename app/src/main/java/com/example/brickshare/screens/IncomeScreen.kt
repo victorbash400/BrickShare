@@ -3,7 +3,9 @@ package com.example.brickshare.screens
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
@@ -15,7 +17,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -70,7 +71,8 @@ fun IncomeScreen(navController: NavController) {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .padding(16.dp),
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState()), // Added scrolling here
                 verticalArrangement = Arrangement.Top
             ) {
                 // Total Income Summary Card
@@ -99,7 +101,6 @@ fun IncomeScreen(navController: NavController) {
                             fontSize = 18.sp,
                             color = DeepNavy.copy(alpha = 0.7f)
                         )
-
                         Text(
                             "$175",
                             style = TextStyle(
@@ -110,7 +111,6 @@ fun IncomeScreen(navController: NavController) {
                             ),
                             modifier = Modifier.padding(vertical = 8.dp)
                         )
-
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center,
@@ -160,10 +160,7 @@ fun IncomeScreen(navController: NavController) {
                             fontWeight = FontWeight.Bold,
                             color = DeepNavy
                         )
-
                         Spacer(modifier = Modifier.height(16.dp))
-
-                        // Bar Chart Placeholder
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -203,9 +200,7 @@ fun IncomeScreen(navController: NavController) {
                             fontWeight = FontWeight.Bold,
                             color = DeepNavy
                         )
-
                         Spacer(modifier = Modifier.height(8.dp))
-
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
@@ -216,9 +211,7 @@ fun IncomeScreen(navController: NavController) {
                                 tint = HederaGreen,
                                 modifier = Modifier.size(24.dp)
                             )
-
                             Spacer(modifier = Modifier.width(8.dp))
-
                             Text(
                                 "Next 3 months: $150",
                                 fontFamily = BrickShareFonts.Halcyon,
@@ -227,9 +220,7 @@ fun IncomeScreen(navController: NavController) {
                                 color = DeepNavy
                             )
                         }
-
                         Spacer(modifier = Modifier.height(8.dp))
-
                         Text(
                             "Based on your current investments and market performance",
                             fontFamily = BrickShareFonts.Halcyon,
@@ -272,7 +263,6 @@ fun MonthBar(month: String, height: Float, value: String) {
             color = DeepNavy,
             modifier = Modifier.padding(bottom = 4.dp)
         )
-
         Box(
             modifier = Modifier
                 .width(30.dp)
@@ -280,7 +270,6 @@ fun MonthBar(month: String, height: Float, value: String) {
                 .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
                 .background(HederaGreen.copy(alpha = 0.8f))
         )
-
         Text(
             month,
             fontFamily = BrickShareFonts.Halcyon,
@@ -306,7 +295,6 @@ fun IncomeHistoryItem(month: String, amount: Double) {
             fontSize = 16.sp,
             color = DeepNavy
         )
-
         Text(
             "$${String.format("%.2f", amount)}",
             fontFamily = BrickShareFonts.Halcyon,
