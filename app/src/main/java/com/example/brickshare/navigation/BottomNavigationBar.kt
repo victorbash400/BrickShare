@@ -36,9 +36,9 @@ data class BottomNavItem(
 fun EnhancedBottomNavigationBar(
     navController: NavController,
     userViewModel: UserViewModel,
-    backgroundColor: Color = Color(0xFF121212), // Dark surface to match Dashboard
-    selectedItemColor: Color = Color(0xFF90CAF9), // Bluish primary from Dashboard
-    unselectedItemColor: Color = Color(0xFFAAAAAA) // Subtle gray for unselected
+    backgroundColor: Color = Color(0xFF121212),
+    selectedItemColor: Color = Color(0xFF90CAF9),
+    unselectedItemColor: Color = Color(0xFFAAAAAA)
 ) {
     val userRole by userViewModel.userRole.collectAsState()
 
@@ -50,7 +50,7 @@ fun EnhancedBottomNavigationBar(
             BottomNavItem("income", Icons.Rounded.MonetizationOn, Icons.Rounded.MonetizationOn),
             BottomNavItem("profile", Icons.Rounded.AccountCircle, Icons.Rounded.AccountCircle)
         )
-        "owner" -> listOf(
+        "property_owner" -> listOf(
             BottomNavItem("dashboard", Icons.Rounded.Dashboard, Icons.Rounded.Dashboard),
             BottomNavItem("add_property", Icons.Rounded.AddCircleOutline, Icons.Rounded.AddCircle),
             BottomNavItem("manage_property/1", Icons.Rounded.Tune, Icons.Rounded.Tune),
@@ -69,7 +69,7 @@ fun EnhancedBottomNavigationBar(
         shadowElevation = 4.dp,
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp) // Thinner than typical bottom nav
+            .height(56.dp)
     ) {
         Row(
             modifier = Modifier
@@ -110,7 +110,7 @@ fun EnhancedBottomNavigationBar(
                         },
                         modifier = Modifier
                             .scale(scale)
-                            .size(36.dp) // Compact size
+                            .size(36.dp)
                     ) {
                         Icon(
                             imageVector = if (selected) item.selectedIcon else item.icon,
@@ -125,7 +125,7 @@ fun EnhancedBottomNavigationBar(
                                     .offset(x = 10.dp, y = (-10).dp)
                                     .size(14.dp)
                                     .align(Alignment.TopEnd),
-                                containerColor = Color(0xFFFF5722), // Pop of color for badge
+                                containerColor = Color(0xFFFF5722),
                                 contentColor = Color.White
                             ) {
                                 Text(

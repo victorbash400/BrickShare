@@ -1,5 +1,6 @@
 package com.example.brickshare.navigation
 
+import androidx.activity.result.ActivityResultLauncher
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -9,7 +10,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -17,15 +17,20 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.brickshare.screens.*
 import com.example.brickshare.viewmodel.UserViewModel
+import com.google.android.gms.auth.api.signin.GoogleSignInClient
 
 @Composable
-fun Navigation(userViewModel: UserViewModel = viewModel()) {
+fun Navigation(
+    userViewModel: UserViewModel,
+    signInLauncher: ActivityResultLauncher<android.content.Intent>,
+    googleSignInClient: GoogleSignInClient
+) {
     val navController = rememberNavController()
     val userRole by userViewModel.userRole.collectAsState()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // Routes where the bottom navigation bar should be visible
+    // Define routes where the bottom navigation bar should be visible
     val mainAppRoutes = listOf(
         "dashboard",
         "browse",
@@ -39,6 +44,7 @@ fun Navigation(userViewModel: UserViewModel = viewModel()) {
                     currentRoute?.startsWith("manage_property/") == true
             )
 
+    // Set the starting screen
     val startDestination = "welcome"
 
     Scaffold(
@@ -58,13 +64,7 @@ fun Navigation(userViewModel: UserViewModel = viewModel()) {
             modifier = Modifier.padding(innerPadding)
         ) {
             composable("welcome") {
-                WelcomeScreen(navController)
-            }
-            composable("signin") {
-                SignInScreen(navController)
-            }
-            composable("signup") {
-                SignUpScreen(navController)
+                WelcomeScreen(navController, signInLauncher, googleSignInClient)
             }
             composable("role_selection") {
                 RoleSelectionScreen(navController, userViewModel)
@@ -103,9 +103,6 @@ fun Navigation(userViewModel: UserViewModel = viewModel()) {
     }
 }
 
-/**
- * Utility function to clear onboarding screens from the back stack and navigate to the main app.
- */
 fun NavHostController.navigateToMainApp() {
     navigate("dashboard") {
         popUpTo("welcome") { inclusive = true }

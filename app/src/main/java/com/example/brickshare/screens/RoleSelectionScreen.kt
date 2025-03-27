@@ -23,28 +23,23 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import androidx.navigation.compose.rememberNavController
-import com.example.brickshare.R
+import com.example.brickshare.model.UserRole
 import com.example.brickshare.ui.theme.BrickShareFonts
 import com.example.brickshare.viewmodel.UserViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RoleSelectionScreen(navController: NavController, userViewModel: UserViewModel) {
-    var selectedRole by remember { mutableStateOf("") }
+    var selectedRole by remember { mutableStateOf<UserRole?>(null) }
 
-    // Animation states
     val headerVisible = remember { MutableTransitionState(false).apply { targetState = true } }
     val cardsVisible = remember { MutableTransitionState(false).apply { targetState = true } }
     val buttonVisible = remember { MutableTransitionState(false).apply { targetState = true } }
 
-    // Create color scheme to match welcome screen
     val colorScheme = darkColorScheme(
         primary = Color(0xFF90CAF9),
         onPrimary = Color.Black,
@@ -84,16 +79,12 @@ fun RoleSelectionScreen(navController: NavController, userViewModel: UserViewMod
                     )
                 )
         ) {
-            // Subtle pattern overlay
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
                         brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color(0x10304FFE),
-                                Color(0x0526A69A)
-                            ),
+                            colors = listOf(Color(0x10304FFE), Color(0x0526A69A)),
                             radius = 1200f
                         )
                     )
@@ -107,7 +98,6 @@ fun RoleSelectionScreen(navController: NavController, userViewModel: UserViewMod
             ) {
                 Spacer(modifier = Modifier.height(48.dp))
 
-                // Animated Header
                 AnimatedVisibility(
                     visibleState = headerVisible,
                     enter = fadeIn(tween(500)) + slideInVertically(
@@ -116,7 +106,6 @@ fun RoleSelectionScreen(navController: NavController, userViewModel: UserViewMod
                     )
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        // Title
                         Text(
                             text = "Select Your Role",
                             fontFamily = BrickShareFonts.Halcyon,
@@ -124,10 +113,7 @@ fun RoleSelectionScreen(navController: NavController, userViewModel: UserViewMod
                             color = Color.White,
                             textAlign = TextAlign.Center
                         )
-
                         Spacer(modifier = Modifier.height(8.dp))
-
-                        // Subtitle
                         Text(
                             text = "How will you participate in BrickShare?",
                             fontFamily = BrickShareFonts.Halcyon,
@@ -140,7 +126,6 @@ fun RoleSelectionScreen(navController: NavController, userViewModel: UserViewMod
 
                 Spacer(modifier = Modifier.height(40.dp))
 
-                // Role options in a selectable group
                 AnimatedVisibility(
                     visibleState = cardsVisible,
                     enter = fadeIn(tween(700)) + slideInVertically(
@@ -152,24 +137,22 @@ fun RoleSelectionScreen(navController: NavController, userViewModel: UserViewMod
                         modifier = Modifier.selectableGroup(),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Investor Card
                         EnhancedRoleCard(
                             title = "Investor",
                             description = "Buy fractional shares of properties on Hedera and earn passive income",
-                            isSelected = selectedRole == "investor",
-                            onSelect = { selectedRole = "investor" },
+                            isSelected = selectedRole == UserRole.INVESTOR,
+                            onSelect = { selectedRole = UserRole.INVESTOR },
                             colorScheme = colorScheme,
                             icon = Icons.Rounded.AccountBalance
                         )
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // Property Owner Card
                         EnhancedRoleCard(
                             title = "Property Owner",
                             description = "Tokenize and list your properties for fractional ownership",
-                            isSelected = selectedRole == "owner",
-                            onSelect = { selectedRole = "owner" },
+                            isSelected = selectedRole == UserRole.PROPERTY_OWNER,
+                            onSelect = { selectedRole = UserRole.PROPERTY_OWNER },
                             colorScheme = colorScheme,
                             icon = Icons.Rounded.Apartment
                         )
@@ -178,7 +161,6 @@ fun RoleSelectionScreen(navController: NavController, userViewModel: UserViewMod
 
                 Spacer(modifier = Modifier.weight(1f))
 
-                // Continue Button
                 AnimatedVisibility(
                     visibleState = buttonVisible,
                     enter = fadeIn(tween(900)) + slideInVertically(
@@ -188,14 +170,17 @@ fun RoleSelectionScreen(navController: NavController, userViewModel: UserViewMod
                 ) {
                     ElevatedButton(
                         onClick = {
-                            userViewModel.setUserRole(selectedRole)
-                            navController.navigate("dashboard")
+                            selectedRole?.let { role ->
+                                // Convert to lowercase to match EnhancedBottomNavigationBar
+                                userViewModel.setUserRole(role.name.lowercase())
+                                navController.navigate("dashboard")
+                            }
                         },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(60.dp),
                         shape = RoundedCornerShape(16.dp),
-                        enabled = selectedRole.isNotEmpty(),
+                        enabled = selectedRole != null,
                         colors = ButtonDefaults.elevatedButtonColors(
                             containerColor = colorScheme.primary,
                             contentColor = colorScheme.onPrimary,
@@ -256,14 +241,11 @@ fun EnhancedRoleCard(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Icon with circular background
             Box(
                 modifier = Modifier
                     .size(52.dp)
                     .clip(CircleShape)
-                    .background(
-                        if (isSelected) Color(0x3090CAF9) else Color(0xFF262626)
-                    ),
+                    .background(if (isSelected) Color(0x3090CAF9) else Color(0xFF262626)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -276,19 +258,14 @@ fun EnhancedRoleCard(
 
             Spacer(modifier = Modifier.width(16.dp))
 
-            // Text content
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
                     fontSize = 18.sp,
                     fontFamily = BrickShareFonts.Halcyon,
                     color = if (isSelected) colorScheme.primary else Color.White
                 )
-
                 Spacer(modifier = Modifier.height(4.dp))
-
                 Text(
                     text = description,
                     fontSize = 14.sp,
@@ -297,7 +274,6 @@ fun EnhancedRoleCard(
                 )
             }
 
-            // Radio button
             RadioButton(
                 selected = isSelected,
                 onClick = null,
@@ -308,13 +284,4 @@ fun EnhancedRoleCard(
             )
         }
     }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun PreviewRoleSelectionScreen() {
-    RoleSelectionScreen(
-        navController = rememberNavController(),
-        userViewModel = UserViewModel()
-    )
 }

@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "851529847458",
+    "project_id": "brickshare-8f970",
+    "storage_bucket": "brickshare-8f970.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:851529847458:android:b3ad201b2372561661bdfb",
+        "android_client_info": {
+          "package_name": "com.example.brickshare"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "851529847458-gtbv3ha66ncg1cbjq76icvsbl62tkhrt.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.brickshare",
+            "certificate_hash": "57c557afc28bc95faa847260c2e3de56f6308138"
+          }
+        },
+        {
+          "client_id": "851529847458-u9ei43n2hmnth6ge71bf112368ikvctc.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBC9fewo_JKuS8OLDBb36GVp_HIaZPcP1s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "851529847458-u9ei43n2hmnth6ge71bf112368ikvctc.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

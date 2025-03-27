@@ -1,5 +1,6 @@
 package com.example.brickshare.screens
 
+import androidx.activity.result.ActivityResultLauncher
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -15,18 +16,23 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import androidx.navigation.compose.rememberNavController
 import com.example.brickshare.R
 import com.example.brickshare.ui.theme.BrickShareFonts
+import com.google.android.gms.auth.api.signin.GoogleSignInClient
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WelcomeScreen(navController: NavController) {
+fun WelcomeScreen(
+    navController: NavController,
+    signInLauncher: ActivityResultLauncher<android.content.Intent>,
+    googleSignInClient: GoogleSignInClient
+) {
     val colorScheme = darkColorScheme(
         primary = Color(0xFF90CAF9),
         onPrimary = Color.Black,
@@ -37,11 +43,27 @@ fun WelcomeScreen(navController: NavController) {
         onSurface = Color.White
     )
 
-    // State for splash screen
     var showSplash by remember { mutableStateOf(true) }
+    // Listen to auth state changes
+    val currentUser by produceState<FirebaseUser?>(initialValue = FirebaseAuth.getInstance().currentUser) {
+        val listener = FirebaseAuth.AuthStateListener { auth ->
+            value = auth.currentUser
+        }
+        FirebaseAuth.getInstance().addAuthStateListener(listener)
+        awaitDispose { FirebaseAuth.getInstance().removeAuthStateListener(listener) }
+    }
+
+    // Navigate only when splash screen is gone and user is signed in
+    LaunchedEffect(showSplash, currentUser) {
+        if (!showSplash && currentUser != null) {
+            navController.navigate("role_selection") {
+                popUpTo("welcome") { inclusive = true }
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
-        delay(2000) // Show splash for 2 seconds
+        delay(2000)
         showSplash = false
     }
 
@@ -66,7 +88,6 @@ fun WelcomeScreen(navController: NavController) {
         )
     ) {
         if (showSplash) {
-            // Splash Screen
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -83,7 +104,6 @@ fun WelcomeScreen(navController: NavController) {
                 )
             }
         } else {
-            // Welcome Screen
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -98,10 +118,7 @@ fun WelcomeScreen(navController: NavController) {
                         .fillMaxSize()
                         .background(
                             brush = Brush.radialGradient(
-                                colors = listOf(
-                                    Color(0x10304FFE),
-                                    Color(0x0526A69A)
-                                ),
+                                colors = listOf(Color(0x10304FFE), Color(0x0526A69A)),
                                 radius = 1200f
                             )
                         )
@@ -167,7 +184,9 @@ fun WelcomeScreen(navController: NavController) {
                             .padding(bottom = 64.dp)
                     ) {
                         ElevatedButton(
-                            onClick = { navController.navigate("signin") },
+                            onClick = {
+                                signInLauncher.launch(googleSignInClient.signInIntent)
+                            },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(60.dp),
@@ -182,28 +201,7 @@ fun WelcomeScreen(navController: NavController) {
                             )
                         ) {
                             Text(
-                                "Sign In",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Normal,
-                                fontFamily = BrickShareFonts.Halcyon
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        FilledTonalButton(
-                            onClick = { navController.navigate("signup") },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(60.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = Color(0x3090CAF9),
-                                contentColor = Color.White
-                            )
-                        ) {
-                            Text(
-                                "Create Account",
+                                "Sign in with Google",
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Normal,
                                 fontFamily = BrickShareFonts.Halcyon
@@ -212,28 +210,16 @@ fun WelcomeScreen(navController: NavController) {
 
                         Spacer(modifier = Modifier.height(32.dp))
 
-                        TextButton(
-                            onClick = { /* Handle terms click */ },
-                            colors = ButtonDefaults.textButtonColors(
-                                contentColor = Color(0xFFAAAAAA)
-                            )
-                        ) {
-                            Text(
-                                text = "Privacy Policy and Terms",
-                                fontFamily = BrickShareFonts.Halcyon,
-                                fontSize = 14.sp,
-                                textAlign = TextAlign.Center
-                            )
-                        }
+                        Text(
+                            text = "A Google account is required to sign in",
+                            color = Color(0xFFAAAAAA),
+                            fontFamily = BrickShareFonts.Halcyon,
+                            fontSize = 14.sp,
+                            textAlign = TextAlign.Center
+                        )
                     }
                 }
             }
         }
     }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun PreviewWelcomeScreen() {
-    WelcomeScreen(navController = rememberNavController())
 }
