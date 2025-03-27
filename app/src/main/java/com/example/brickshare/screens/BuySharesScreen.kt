@@ -1,5 +1,6 @@
 package com.example.brickshare.screens
 
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -34,46 +35,60 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.example.brickshare.HederaUtils
 import com.example.brickshare.ui.theme.BrickShareFonts
 import com.example.brickshare.ui.theme.HederaGreen
 import com.example.brickshare.ui.theme.DeepNavy
 import com.example.brickshare.ui.theme.BuildingBlocksWhite
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.navigation.compose.rememberNavController
-
-data class PropertyInfo(
-    val id: String,
-    val name: String,
-    val pricePerShare: Int,
-    val availableShares: Int
-)
+import kotlinx.coroutines.tasks.await
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BuySharesScreen(navController: NavController, propertyId: String) {
-    val property = PropertyInfo(
-        id = propertyId,
-        name = "Seaside Villa",
-        pricePerShare = 50,
-        availableShares = 20
-    )
-
-    var shareCount by remember { mutableStateOf("5") }
-    var totalAmount by remember { mutableStateOf(5 * property.pricePerShare) }
-    var selectedPaymentMethod by remember { mutableStateOf("Credit Card") }
+    val db = Firebase.firestore
+    var property by remember { mutableStateOf<Map<String, Any>?>(null) }
+    var shareCount by remember { mutableStateOf("") }
+    var totalAmount by remember { mutableStateOf(0.0) }
+    var selectedPaymentMethod by remember { mutableStateOf("Hedera HBAR") }
     var expanded by remember { mutableStateOf(false) }
     var isPurchaseSuccessful by remember { mutableStateOf(false) }
     var showSuccess by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
 
-    val paymentMethods = listOf("Credit Card", "Debit Card", "Bank Transfer", "PayPal")
+    val paymentMethods = listOf("Hedera HBAR")
 
     val checkmarkAlpha by animateFloatAsState(
         targetValue = if (showSuccess) 0.8f else 0f,
         animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing)
     )
+
+    // Fetch property data and refresh after purchase
+    fun fetchPropertyData() {
+        coroutineScope.launch {
+            Log.d("BuyShares", "Fetching property data for ID: $propertyId")
+            db.collection("properties").document(propertyId).get()
+                .addOnSuccessListener { document ->
+                    property = document.data
+                    Log.d("BuyShares", "Property data fetched: ${document.data}")
+                }
+                .addOnFailureListener { e ->
+                    Log.e("BuyShares", "Failed to fetch property data: ${e.message}", e)
+                    errorMessage = "Failed to load property data"
+                }
+        }
+    }
+
+    LaunchedEffect(propertyId) {
+        fetchPropertyData()
+    }
 
     MaterialTheme(
         colorScheme = MaterialTheme.colorScheme.copy(
@@ -117,23 +132,19 @@ fun BuySharesScreen(navController: NavController, propertyId: String) {
                     .fillMaxSize()
                     .padding(paddingValues)
             ) {
-                // Main content
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(24.dp)
                 ) {
-                    // Property Info
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                        colors = CardColors(
+                        colors = CardDefaults.cardColors(
                             containerColor = Color.White,
-                            contentColor = DeepNavy,
-                            disabledContainerColor = Color.Gray,
-                            disabledContentColor = Color.LightGray
+                            contentColor = DeepNavy
                         )
                     ) {
                         Column(
@@ -142,7 +153,7 @@ fun BuySharesScreen(navController: NavController, propertyId: String) {
                                 .fillMaxWidth()
                         ) {
                             Text(
-                                text = property.name,
+                                text = property?.get("metadata.address") as? String ?: "Loading...",
                                 style = TextStyle(
                                     fontFamily = BrickShareFonts.Halcyon,
                                     fontSize = 24.sp,
@@ -156,13 +167,13 @@ fun BuySharesScreen(navController: NavController, propertyId: String) {
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    text = "$${property.pricePerShare} per share",
+                                    text = "$${property?.get("pricePerToken") ?: 0} per share",
                                     fontFamily = BrickShareFonts.Halcyon,
                                     fontSize = 16.sp,
                                     color = DeepNavy.copy(alpha = 0.8f)
                                 )
                                 Text(
-                                    text = "${property.availableShares} shares available",
+                                    text = "${property?.get("totalTokens") ?: 0} shares available",
                                     fontFamily = BrickShareFonts.Halcyon,
                                     fontSize = 16.sp,
                                     color = HederaGreen
@@ -171,22 +182,18 @@ fun BuySharesScreen(navController: NavController, propertyId: String) {
                         }
                     }
 
-                    // Step Indicator
                     StepIndicator(
                         currentStep = if (isPurchaseSuccessful) 3 else if (shareCount.isNotEmpty() && shareCount.toIntOrNull() ?: 0 > 0) 2 else 1,
                         primaryColor = HederaGreen
                     )
 
-                    // Step 1: Share Selection
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-                        colors = CardColors(
+                        colors = CardDefaults.cardColors(
                             containerColor = Color.White,
-                            contentColor = DeepNavy,
-                            disabledContainerColor = Color.Gray,
-                            disabledContentColor = Color.LightGray
+                            contentColor = DeepNavy
                         )
                     ) {
                         Column(
@@ -206,9 +213,11 @@ fun BuySharesScreen(navController: NavController, propertyId: String) {
                             OutlinedTextField(
                                 value = shareCount,
                                 onValueChange = { newValue ->
-                                    if (newValue.isEmpty() || newValue.toIntOrNull() != null) {
+                                    if (newValue.isEmpty() || (newValue.toIntOrNull() != null)) {
                                         shareCount = newValue
-                                        totalAmount = (newValue.toIntOrNull() ?: 0) * property.pricePerShare
+                                        val shares = newValue.toIntOrNull() ?: 0
+                                        val pricePerToken = (property?.get("pricePerToken") as? Number)?.toDouble() ?: 0.0
+                                        totalAmount = shares * pricePerToken
                                     }
                                 },
                                 label = { Text("Number of Shares", fontFamily = BrickShareFonts.Halcyon) },
@@ -239,7 +248,7 @@ fun BuySharesScreen(navController: NavController, propertyId: String) {
                                     color = DeepNavy
                                 )
                                 Text(
-                                    text = "$${totalAmount}",
+                                    text = "$$totalAmount",
                                     fontFamily = BrickShareFonts.Halcyon,
                                     fontSize = 24.sp,
                                     fontWeight = FontWeight.Bold,
@@ -249,16 +258,13 @@ fun BuySharesScreen(navController: NavController, propertyId: String) {
                         }
                     }
 
-                    // Step 2: Payment Method
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-                        colors = CardColors(
+                        colors = CardDefaults.cardColors(
                             containerColor = Color.White,
-                            contentColor = DeepNavy,
-                            disabledContainerColor = Color.Gray,
-                            disabledContentColor = Color.LightGray
+                            contentColor = DeepNavy
                         )
                     ) {
                         Column(
@@ -328,38 +334,122 @@ fun BuySharesScreen(navController: NavController, propertyId: String) {
                         }
                     }
 
+                    errorMessage?.let {
+                        Text(
+                            text = it,
+                            color = MaterialTheme.colorScheme.error,
+                            fontFamily = BrickShareFonts.Halcyon,
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+
                     Spacer(modifier = Modifier.weight(1f))
 
-                    // Step 3: Confirm
                     Button(
                         onClick = {
+                            isLoading = true
+                            errorMessage = null
                             coroutineScope.launch {
-                                isPurchaseSuccessful = true
-                                showSuccess = true
-                                delay(2000)
-                                navController.navigate("portfolio")
+                                try {
+                                    val userId = FirebaseAuth.getInstance().currentUser?.uid
+                                        ?: throw IllegalStateException("User not authenticated")
+                                    Log.d("BuyShares", "User authenticated: $userId")
+
+                                    val userDoc = db.collection("users").document(userId).get().await()
+                                    val buyerAccountId = userDoc.getString("hederaAccountId")
+                                        ?: throw IllegalStateException("No Hedera account ID found for user")
+                                    val buyerPrivateKey = userDoc.getString("hederaPrivateKey")
+                                        ?: throw IllegalStateException("No Hedera private key found for user")
+                                    Log.d("BuyShares", "Buyer Hedera account ID: $buyerAccountId")
+
+                                    val tokenId = property?.get("tokenId") as? String
+                                        ?: throw IllegalStateException("No token ID found for property")
+                                    val amount = shareCount.toIntOrNull()
+                                        ?: throw IllegalStateException("Invalid share count")
+                                    val pricePerToken = (property?.get("pricePerToken") as? Number)?.toDouble()
+                                        ?: throw IllegalStateException("No price per token found")
+
+                                    Log.d("BuyShares", "Initiating purchase: $amount shares of token $tokenId for ${amount * pricePerToken} HBAR")
+                                    HederaUtils.purchasePropertyTokens(
+                                        tokenId = tokenId,
+                                        buyerAccountId = buyerAccountId,
+                                        buyerUserId = userId,
+                                        amount = amount,
+                                        pricePerToken = pricePerToken,
+                                        buyerPrivateKey = buyerPrivateKey
+                                    )
+                                    Log.d("BuyShares", "Hedera token transfer successful")
+
+                                    // Update user token balance
+                                    val currentBalances = userDoc.get("tokenBalances") as? Map<String, Long> ?: emptyMap()
+                                    val newBalance = (currentBalances[propertyId]?.toInt() ?: 0) + amount
+                                    db.collection("users").document(userId)
+                                        .update("tokenBalances.$propertyId", newBalance)
+                                        .await()
+                                    Log.d("BuyShares", "User token balance updated: $newBalance")
+
+                                    // Update property transaction history and totalTokens
+                                    val currentTotalTokens = (property?.get("totalTokens") as? Number)?.toInt() ?: 0
+                                    val newTotalTokens = currentTotalTokens - amount
+                                    db.collection("properties").document(propertyId)
+                                        .update(
+                                            mapOf(
+                                                "transactionHistory" to FieldValue.arrayUnion("Bought $amount shares by $userId for ${amount * pricePerToken} HBAR"),
+                                                "totalTokens" to newTotalTokens
+                                            )
+                                        )
+                                        .await()
+                                    Log.d("BuyShares", "Property updated: transaction history added, totalTokens now $newTotalTokens")
+
+                                    // Refresh property data
+                                    fetchPropertyData()
+
+                                    isPurchaseSuccessful = true
+                                    showSuccess = true
+                                    delay(2000)
+                                    navController.navigate("portfolio")
+                                } catch (e: Exception) {
+                                    Log.e("BuyShares", "Error: ${e.message}", e)
+                                    errorMessage = when {
+                                        e.message?.contains("INVALID_SIGNATURE") == true -> "Invalid signature; check your Hedera key"
+                                        e.message?.contains("INSUFFICIENT_TOKEN_BALANCE") == true -> "Insufficient token balance"
+                                        e.message?.contains("TOKEN_NOT_ASSOCIATED_TO_ACCOUNT") == true -> "Token not associated with your account"
+                                        e.message?.contains("INSUFFICIENT_PAYER_BALANCE") == true -> "Insufficient HBAR balance"
+                                        e.message?.contains("PERMISSION_DENIED") == true -> "Insufficient permissions to update Firestore"
+                                        else -> "Purchase failed: ${e.message}"
+                                    }
+                                } finally {
+                                    isLoading = false
+                                }
                             }
                         },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(56.dp),
-                        enabled = shareCount.isNotEmpty() && (shareCount.toIntOrNull() ?: 0) > 0 && !isPurchaseSuccessful,
+                        enabled = !isLoading && shareCount.isNotEmpty() && (shareCount.toIntOrNull() ?: 0) > 0 && !isPurchaseSuccessful && property != null,
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = HederaGreen
                         )
                     ) {
-                        Text(
-                            text = "Confirm Purchase",
-                            fontFamily = BrickShareFonts.Halcyon,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
+                        if (isLoading) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        } else {
+                            Text(
+                                text = "Confirm Purchase",
+                                fontFamily = BrickShareFonts.Halcyon,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
                     }
                 }
 
-                // Success Overlay
                 AnimatedVisibility(
                     visible = showSuccess,
                     enter = fadeIn(animationSpec = tween(300)) + scaleIn(animationSpec = tween(500)),
@@ -406,7 +496,7 @@ fun BuySharesScreen(navController: NavController, propertyId: String) {
                             Spacer(modifier = Modifier.height(8.dp))
 
                             Text(
-                                text = "You've purchased $shareCount shares of ${property.name}",
+                                text = "You've purchased $shareCount shares",
                                 fontFamily = BrickShareFonts.Halcyon,
                                 fontSize = 16.sp,
                                 color = BuildingBlocksWhite,
@@ -473,13 +563,4 @@ fun StepIndicator(currentStep: Int, primaryColor: Color) {
             }
         }
     }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun PreviewBuySharesScreen() {
-    BuySharesScreen(
-        navController = rememberNavController(),
-        propertyId = "1"
-    )
 }

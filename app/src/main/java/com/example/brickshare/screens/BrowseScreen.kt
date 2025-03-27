@@ -27,8 +27,9 @@ import com.example.brickshare.ui.theme.BrickShareFonts
 import com.example.brickshare.ui.theme.HederaGreen
 import com.example.brickshare.ui.theme.DeepNavy
 import com.example.brickshare.ui.theme.BuildingBlocksWhite
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.navigation.compose.rememberNavController
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.ktx.Firebase
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,6 +37,35 @@ fun BrowseScreen(navController: NavController) {
     var viewMode by remember { mutableStateOf("list") }
     var sortOption by remember { mutableStateOf("Newest") }
     var searchQuery by remember { mutableStateOf("") }
+    val db = Firebase.firestore
+    var properties by remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
+    val coroutineScope = rememberCoroutineScope()
+
+    // Fetch properties from Firestore
+    LaunchedEffect(sortOption, searchQuery) {
+        coroutineScope.launch {
+            val query = db.collection("properties")
+                .let { q ->
+                    if (searchQuery.isNotEmpty()) {
+                        q.whereGreaterThanOrEqualTo("metadata.address", searchQuery)
+                            .whereLessThanOrEqualTo("metadata.address", searchQuery + "\uf8ff")
+                    } else q
+                }
+            when (sortOption) {
+                "Price: Low to High" -> query.orderBy("pricePerToken")
+                "Price: High to Low" -> query.orderBy("pricePerToken", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                "Newest" -> query.orderBy("propertyId", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                // "ROI" -> Add if you store ROI in Firestore later
+                else -> query
+            }.get()
+                .addOnSuccessListener { result ->
+                    properties = result.documents.mapNotNull { it.data }
+                }
+                .addOnFailureListener { e ->
+                    println("Error fetching properties: ${e.message}")
+                }
+        }
+    }
 
     MaterialTheme(
         colorScheme = MaterialTheme.colorScheme.copy(
@@ -55,7 +85,6 @@ fun BrowseScreen(navController: NavController) {
                     .padding(padding)
                     .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
-                // Header
                 Text(
                     text = "Browse Properties",
                     style = TextStyle(
@@ -67,7 +96,6 @@ fun BrowseScreen(navController: NavController) {
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
 
-                // View Mode Toggle
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -92,7 +120,6 @@ fun BrowseScreen(navController: NavController) {
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Search and Filter
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -157,7 +184,7 @@ fun BrowseScreen(navController: NavController) {
                         fontSize = 14.sp,
                         color = DeepNavy.copy(alpha = 0.7f)
                     )
-                    Spacer(modifier = Modifier.width(8.dp)) // Fixed line
+                    Spacer(modifier = Modifier.width(8.dp))
                     var expanded by remember { mutableStateOf(false) }
                     Box {
                         TextButton(onClick = { expanded = true }) {
@@ -200,9 +227,8 @@ fun BrowseScreen(navController: NavController) {
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Content View
                 if (viewMode == "list") {
-                    PropertyListView(navController)
+                    PropertyListView(navController, properties)
                 } else {
                     PropertyMapView()
                 }
@@ -238,20 +264,17 @@ fun ToggleButton(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PropertyListView(navController: NavController) {
-    val properties = listOf(
-        Triple("123 Main St", "$50/share", "5% ROI"),
-        Triple("456 Oak Ave", "$75/share", "4.5% ROI"),
-        Triple("789 Pine Blvd", "$60/share", "4.8% ROI")
-    )
-
+fun PropertyListView(navController: NavController, properties: List<Map<String, Any>>) {
     LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        items(properties) { (address, price, roi) ->
+        items(properties) { property ->
+            val address = (property["metadata"] as? Map<*, *>)?.get("address") as? String ?: "Unknown"
+            val pricePerShare = "$${property["pricePerToken"] ?: 0}/share"
+            val roi = "N/A" // Add ROI field to Firestore if needed
             PropertyCard(
                 address = address,
-                pricePerShare = price,
+                pricePerShare = pricePerShare,
                 roi = roi,
-                onClick = { navController.navigate("property_detail/1") }
+                onClick = { navController.navigate("buy_shares/${property["propertyId"]}") } // Link to BuySharesScreen
             )
         }
     }
@@ -373,10 +396,4 @@ fun PropertyPin(modifier: Modifier = Modifier) {
             )
         }
     }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun PreviewBrowseScreen() {
-    BrowseScreen(navController = rememberNavController())
 }

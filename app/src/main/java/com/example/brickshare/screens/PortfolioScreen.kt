@@ -8,7 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -23,12 +23,38 @@ import com.example.brickshare.ui.theme.BrickShareFonts
 import com.example.brickshare.ui.theme.HederaGreen
 import com.example.brickshare.ui.theme.DeepNavy
 import com.example.brickshare.ui.theme.BuildingBlocksWhite
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.navigation.compose.rememberNavController
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.ktx.Firebase
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PortfolioScreen(navController: NavController) {
+    val db = Firebase.firestore
+    val userId = FirebaseAuth.getInstance().currentUser?.uid
+    var tokenBalances by remember { mutableStateOf<Map<String, Long>>(emptyMap()) }
+    var properties by remember { mutableStateOf<Map<String, Map<String, Any>>>(emptyMap()) }
+    val coroutineScope = rememberCoroutineScope()
+
+    // Fetch user token balances and properties
+    LaunchedEffect(userId) {
+        if (userId != null) {
+            coroutineScope.launch {
+                // Fetch user's token balances
+                val userDoc = db.collection("users").document(userId).get().await()
+                tokenBalances = userDoc.get("tokenBalances") as? Map<String, Long> ?: emptyMap()
+
+                // Fetch all properties
+                val propertiesSnapshot = db.collection("properties").get().await()
+                properties = propertiesSnapshot.documents.associate { doc ->
+                    doc.id to doc.data!!
+                }
+            }
+        }
+    }
+
     MaterialTheme(
         colorScheme = MaterialTheme.colorScheme.copy(
             primary = HederaGreen,
@@ -71,11 +97,9 @@ fun PortfolioScreen(navController: NavController) {
                         .height(180.dp),
                     shape = RoundedCornerShape(12.dp),
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                    colors = CardColors(
+                    colors = CardDefaults.cardColors(
                         containerColor = Color.White,
-                        contentColor = DeepNavy,
-                        disabledContainerColor = Color.Gray,
-                        disabledContentColor = Color.LightGray
+                        contentColor = DeepNavy
                     )
                 ) {
                     Column(
@@ -105,7 +129,7 @@ fun PortfolioScreen(navController: NavController) {
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Text(
-                                    "7.2%",
+                                    "7.2%", // Placeholder; calculate dynamically if data available
                                     fontFamily = BrickShareFonts.Halcyon,
                                     fontSize = 14.sp,
                                     color = HederaGreen
@@ -113,8 +137,13 @@ fun PortfolioScreen(navController: NavController) {
                             }
                         }
 
+                        // Calculate total value dynamically
+                        val totalValue = tokenBalances.entries.sumOf { (propertyId, shares) ->
+                            val pricePerToken = (properties[propertyId]?.get("pricePerToken") as? Number)?.toDouble() ?: 0.0
+                            shares * pricePerToken
+                        }
                         Text(
-                            "$34,750",
+                            "$${String.format("%.2f", totalValue)}",
                             style = TextStyle(
                                 fontFamily = BrickShareFonts.Halcyon,
                                 fontSize = 32.sp,
@@ -172,28 +201,38 @@ fun PortfolioScreen(navController: NavController) {
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Property Cards
-                PropertyCard(
-                    name = "Sunset Tower",
-                    shares = 5,
-                    value = 250.0,
-                    roi = 5.0,
-                    onBuyMore = { /* Buy more shares */ }
-                )
+                // Dynamic Property Cards
+                if (tokenBalances.isEmpty()) {
+                    Text(
+                        "No investments yet",
+                        fontFamily = BrickShareFonts.Halcyon,
+                        fontSize = 16.sp,
+                        color = DeepNavy.copy(alpha = 0.7f)
+                    )
+                } else {
+                    tokenBalances.forEach { (propertyId, shares) ->
+                        val propertyData = properties[propertyId]
+                        if (propertyData != null) {
+                            val name = propertyData["metadata.address"] as? String ?: "Unknown Property"
+                            val pricePerToken = (propertyData["pricePerToken"] as? Number)?.toDouble() ?: 0.0
+                            val value = shares * pricePerToken
+                            val roi = 5.0 // Placeholder; fetch real ROI if available
+
+                            PropertyCard(
+                                name = name,
+                                shares = shares.toInt(),
+                                value = value,
+                                roi = roi,
+                                onBuyMore = { navController.navigate("buyShares/$propertyId") }
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                PropertyCard(
-                    name = "Downtown Heights",
-                    shares = 3,
-                    value = 180.0,
-                    roi = 4.2,
-                    onBuyMore = { /* Buy more shares */ }
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Income Section
+                // Income Section (Placeholder)
                 OutlinedCard(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.outlinedCardColors(
@@ -216,7 +255,7 @@ fun PortfolioScreen(navController: NavController) {
                                 color = DeepNavy
                             )
                             Text(
-                                "$175",
+                                "$175", // Placeholder; calculate dynamically if data available
                                 fontFamily = BrickShareFonts.Halcyon,
                                 fontSize = 24.sp,
                                 fontWeight = FontWeight.Bold,
@@ -256,11 +295,9 @@ fun PropertyCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardColors(
+        colors = CardDefaults.cardColors(
             containerColor = Color.White,
-            contentColor = DeepNavy,
-            disabledContainerColor = Color.Gray,
-            disabledContentColor = Color.LightGray
+            contentColor = DeepNavy
         )
     ) {
         Row(
@@ -311,10 +348,4 @@ fun PropertyCard(
             }
         }
     }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun PreviewPortfolioScreen() {
-    PortfolioScreen(navController = rememberNavController())
 }

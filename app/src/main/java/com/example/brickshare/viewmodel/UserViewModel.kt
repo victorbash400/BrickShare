@@ -5,11 +5,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 class UserViewModel : ViewModel() {
-    // Use String for simplicity; later, convert to your UserRole enum if needed
+    private val _userId = MutableStateFlow<String?>(null)
+    val userId: StateFlow<String?> = _userId
+
     private val _userRole = MutableStateFlow<String?>(null)
     val userRole: StateFlow<String?> = _userRole
 
-    fun setUserRole(role: String) {
+    fun setUserId(uid: String?) {  // Changed to String?
+        _userId.value = uid
+    }
+
+    fun setUserRole(role: String?) {  // Changed to String?
         _userRole.value = role
     }
 }

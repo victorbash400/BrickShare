@@ -27,10 +27,10 @@ fun Navigation(
 ) {
     val navController = rememberNavController()
     val userRole by userViewModel.userRole.collectAsState()
+    val userId by userViewModel.userId.collectAsState()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // Define routes where the bottom navigation bar should be visible
     val mainAppRoutes = listOf(
         "dashboard",
         "browse",
@@ -44,8 +44,7 @@ fun Navigation(
                     currentRoute?.startsWith("manage_property/") == true
             )
 
-    // Set the starting screen
-    val startDestination = "welcome"
+    val startDestination = "welcome"  // Back to static start, as in your original
 
     Scaffold(
         bottomBar = {
@@ -82,7 +81,7 @@ fun Navigation(
                 IncomeScreen(navController)
             }
             composable("profile") {
-                ProfileScreen(navController)
+                ProfileScreen(navController, userViewModel)
             }
             composable("property_detail/{propertyId}") { backStackEntry ->
                 val propertyId = backStackEntry.arguments?.getString("propertyId") ?: ""
@@ -93,7 +92,11 @@ fun Navigation(
             }
             composable("manage_property/{propertyId}") { backStackEntry ->
                 val propertyId = backStackEntry.arguments?.getString("propertyId") ?: ""
-                ManagePropertyScreen(navController, propertyId)
+                if (userId != null) {
+                    ManagePropertyScreen(navController, propertyId, userViewModel)
+                } else {
+                    navController.navigate("welcome")
+                }
             }
             composable("buy_shares/{propertyId}") { backStackEntry ->
                 val propertyId = backStackEntry.arguments?.getString("propertyId") ?: ""

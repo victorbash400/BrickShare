@@ -6,6 +6,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -17,13 +19,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.*
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.navigation.compose.rememberNavController
-import com.example.brickshare.ui.theme.BrickShareFonts.Halcyon
 import com.example.brickshare.ui.theme.*
 import com.example.brickshare.viewmodel.UserViewModel
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.ktx.Firebase
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,6 +33,36 @@ fun DashboardScreen(
     userViewModel: UserViewModel
 ) {
     val userRole by userViewModel.userRole.collectAsState()
+    val userId by userViewModel.userId.collectAsState()
+    val scope = rememberCoroutineScope()
+    var hbarBalance by remember { mutableStateOf(0.0) }
+    var tokenBalances by remember { mutableStateOf<Map<String, Long>>(emptyMap()) }
+    var properties by remember { mutableStateOf<List<Triple<String, String, String>>>(emptyList()) }
+    val db = Firebase.firestore
+
+    // Fetch user and property data
+    LaunchedEffect(userId) {
+        scope.launch {
+            if (userId != null) {
+                // Fetch user data
+                val userDoc = db.collection("users").document(userId!!).get().await()
+                hbarBalance = userDoc.getLong("hbarBalance")?.toDouble() ?: 0.0
+                tokenBalances = userDoc.get("tokenBalances") as? Map<String, Long> ?: emptyMap()
+
+                // Fetch only properties owned by the logged-in user
+                val propertiesSnapshot = db.collection("properties")
+                    .whereEqualTo("ownerId", userId)
+                    .get()
+                    .await()
+                properties = propertiesSnapshot.documents.mapNotNull { propDoc ->
+                    val propertyId = propDoc.id
+                    val address = propDoc.getString("metadata.address") ?: "Unknown"
+                    val pricePerToken = propDoc.getDouble("pricePerToken")?.toString() ?: "0.5"
+                    Triple(propertyId, address, "$pricePerToken HBAR/share")
+                }
+            }
+        }
+    }
 
     MaterialTheme(
         colorScheme = MaterialTheme.colorScheme.copy(
@@ -62,9 +93,9 @@ fun DashboardScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Welcome back, Jesse!",
+                        text = "Welcome back!",
                         style = TextStyle(
-                            fontFamily = Halcyon,
+                            fontFamily = BrickShareFonts.Halcyon,
                             fontWeight = FontWeight.Bold,
                             fontSize = 24.sp,
                             color = DeepNavy
@@ -87,11 +118,11 @@ fun DashboardScreen(
                     }
                 }
 
-                WalletCard(userRole, navController)
+                WalletCard(userRole, hbarBalance, tokenBalances, navController)
                 Spacer(Modifier.height(16.dp))
-                BudgetCircle(userRole)
+                BudgetCircle(userRole, hbarBalance)
                 Spacer(Modifier.height(16.dp))
-                WatchlistSection(userRole, navController)
+                WatchlistSection(userRole, properties, navController)
                 Spacer(Modifier.height(16.dp))
                 HistorySection(navController)
             }
@@ -99,8 +130,10 @@ fun DashboardScreen(
     }
 }
 
+// Rest of the file (WalletCard, BudgetCircle, etc.) remains unchanged
+
 @Composable
-fun WalletCard(userRole: String?, navController: NavController) {
+fun WalletCard(userRole: String?, hbarBalance: Double, tokenBalances: Map<String, Long>, navController: NavController) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -124,16 +157,16 @@ fun WalletCard(userRole: String?, navController: NavController) {
                 Text(
                     text = if (userRole == "investor") "Portfolio Value" else "Property Value",
                     style = TextStyle(
-                        fontFamily = Halcyon,
+                        fontFamily = BrickShareFonts.Halcyon,
                         fontSize = 16.sp,
                         color = DeepNavy.copy(alpha = 0.7f)
                     )
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = if (userRole == "investor") "$124,500" else "$500,000",
+                    text = if (userRole == "investor") "$hbarBalance HBAR" else "${tokenBalances.values.sum()} Shares",
                     style = TextStyle(
-                        fontFamily = Halcyon,
+                        fontFamily = BrickShareFonts.Halcyon,
                         fontWeight = FontWeight.Bold,
                         fontSize = 24.sp,
                         color = DeepNavy
@@ -154,7 +187,7 @@ fun WalletCard(userRole: String?, navController: NavController) {
 }
 
 @Composable
-fun BudgetCircle(userRole: String?) {
+fun BudgetCircle(userRole: String?, hbarBalance: Double) {
     Card(
         modifier = Modifier
             .size(150.dp),
@@ -175,9 +208,9 @@ fun BudgetCircle(userRole: String?) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = if (userRole == "investor") "$12,423" else "$8,900",
+                    text = "$hbarBalance HBAR",
                     style = TextStyle(
-                        fontFamily = Halcyon,
+                        fontFamily = BrickShareFonts.Halcyon,
                         fontWeight = FontWeight.Bold,
                         fontSize = 24.sp,
                         color = DeepNavy
@@ -185,9 +218,9 @@ fun BudgetCircle(userRole: String?) {
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "Total Gains",
+                    text = if (userRole == "investor") "Available Balance" else "Total Funds",
                     style = TextStyle(
-                        fontFamily = Halcyon,
+                        fontFamily = BrickShareFonts.Halcyon,
                         fontSize = 14.sp,
                         color = DeepNavy.copy(alpha = 0.7f)
                     )
@@ -198,7 +231,7 @@ fun BudgetCircle(userRole: String?) {
 }
 
 @Composable
-fun WatchlistSection(userRole: String?, navController: NavController) {
+fun WatchlistSection(userRole: String?, properties: List<Triple<String, String, String>>, navController: NavController) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -206,9 +239,9 @@ fun WatchlistSection(userRole: String?, navController: NavController) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = if (userRole == "investor") "Watchlist" else "Properties",
+                text = if (userRole == "investor") "Featured Properties" else "My Properties",
                 style = TextStyle(
-                    fontFamily = Halcyon,
+                    fontFamily = BrickShareFonts.Halcyon,
                     fontWeight = FontWeight.Bold,
                     fontSize = 20.sp,
                     color = DeepNavy
@@ -217,7 +250,7 @@ fun WatchlistSection(userRole: String?, navController: NavController) {
             Text(
                 text = "See All",
                 style = TextStyle(
-                    fontFamily = Halcyon,
+                    fontFamily = BrickShareFonts.Halcyon,
                     fontSize = 16.sp,
                     color = HederaGreen
                 ),
@@ -228,23 +261,9 @@ fun WatchlistSection(userRole: String?, navController: NavController) {
         Spacer(Modifier.height(8.dp))
 
         LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            items(
-                if (userRole == "investor") {
-                    listOf(
-                        Triple("Beach Villa", "+12.5%", "$15,000"),
-                        Triple("City Condo", "+8.2%", "$10,500"),
-                        Triple("Modern Loft", "-2.1%", "$8,200")
-                    )
-                } else {
-                    listOf(
-                        Triple("Beach Villa", "92%", "$2,100/mo"),
-                        Triple("City Condo", "85%", "$800/mo"),
-                        Triple("Modern Loft", "78%", "$1,200/mo")
-                    )
-                }
-            ) { (name, metric, value) ->
-                WatchlistCard(name, metric, value) {
-                    navController.navigate("property_detail/0")
+            items(properties) { (id, address, price) ->
+                WatchlistCard(address, "N/A", price) {
+                    navController.navigate("property_detail/$id")
                 }
             }
         }
@@ -273,7 +292,7 @@ fun WatchlistCard(name: String, metric: String, value: String, onClick: () -> Un
             Text(
                 text = name,
                 style = TextStyle(
-                    fontFamily = Halcyon,
+                    fontFamily = BrickShareFonts.Halcyon,
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
                     color = DeepNavy
@@ -285,17 +304,17 @@ fun WatchlistCard(name: String, metric: String, value: String, onClick: () -> Un
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = metric,
+                    text = "Progress: $metric",
                     style = TextStyle(
-                        fontFamily = Halcyon,
+                        fontFamily = BrickShareFonts.Halcyon,
                         fontSize = 14.sp,
-                        color = if (metric.startsWith("+")) HederaGreen else Color.Red
+                        color = HederaGreen
                     )
                 )
                 Text(
                     text = value,
                     style = TextStyle(
-                        fontFamily = Halcyon,
+                        fontFamily = BrickShareFonts.Halcyon,
                         fontSize = 14.sp,
                         color = DeepNavy.copy(alpha = 0.7f)
                     )
@@ -316,7 +335,7 @@ fun HistorySection(navController: NavController) {
             Text(
                 text = "History",
                 style = TextStyle(
-                    fontFamily = Halcyon,
+                    fontFamily = BrickShareFonts.Halcyon,
                     fontWeight = FontWeight.Bold,
                     fontSize = 20.sp,
                     color = DeepNavy
@@ -334,8 +353,7 @@ fun HistorySection(navController: NavController) {
 
         Spacer(Modifier.height(8.dp))
 
-        HistoryItem("Jordan", "MasterCard Debit", "0.00045 BTC")
-        HistoryItem("Uber", "Bitcoin Wallet", "$160")
+        HistoryItem("bashtube400", "Hedera Wallet", "2 Shares")
     }
 }
 
@@ -357,7 +375,7 @@ fun HistoryItem(name: String, method: String, amount: String) {
             Text(
                 text = name[0].toString(),
                 style = TextStyle(
-                    fontFamily = Halcyon,
+                    fontFamily = BrickShareFonts.Halcyon,
                     fontSize = 16.sp,
                     color = DeepNavy
                 )
@@ -368,7 +386,7 @@ fun HistoryItem(name: String, method: String, amount: String) {
             Text(
                 text = name,
                 style = TextStyle(
-                    fontFamily = Halcyon,
+                    fontFamily = BrickShareFonts.Halcyon,
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
                     color = DeepNavy
@@ -377,7 +395,7 @@ fun HistoryItem(name: String, method: String, amount: String) {
             Text(
                 text = method,
                 style = TextStyle(
-                    fontFamily = Halcyon,
+                    fontFamily = BrickShareFonts.Halcyon,
                     fontSize = 14.sp,
                     color = DeepNavy.copy(alpha = 0.7f)
                 )
@@ -387,24 +405,10 @@ fun HistoryItem(name: String, method: String, amount: String) {
         Text(
             text = amount,
             style = TextStyle(
-                fontFamily = Halcyon,
+                fontFamily = BrickShareFonts.Halcyon,
                 fontSize = 16.sp,
                 color = DeepNavy
             )
         )
     }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun DashboardPreviewInvestor() {
-    val viewModel = UserViewModel().apply { setUserRole("investor") }
-    DashboardScreen(rememberNavController(), viewModel)
-}
-
-@Preview(showBackground = true)
-@Composable
-fun DashboardPreviewOwner() {
-    val viewModel = UserViewModel().apply { setUserRole("owner") }
-    DashboardScreen(rememberNavController(), viewModel)
 }

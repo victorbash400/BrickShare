@@ -1,5 +1,6 @@
 package com.example.brickshare.screens
 
+import android.util.Log
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -24,12 +25,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.example.brickshare.HederaUtils
 import com.example.brickshare.ui.theme.BrickShareFonts
 import com.example.brickshare.ui.theme.HederaGreen
 import com.example.brickshare.ui.theme.DeepNavy
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.navigation.compose.rememberNavController
 import com.example.brickshare.ui.theme.BuildingBlocksWhite
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.ktx.Firebase
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,7 +47,21 @@ fun AddPropertyScreen(navController: NavController) {
     val size = remember { mutableStateOf("") }
     val valuation = remember { mutableStateOf("") }
     val sharePrice = remember { mutableStateOf("") }
+    val totalShares = remember { mutableStateOf("") }
     val uploadedPhotos = remember { mutableStateOf(0) }
+    var isLoading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    val coroutineScope = rememberCoroutineScope()
+    val db = Firebase.firestore
+
+    // Validation for enabling Next/Submit button
+    val isStepValid = when (currentStep) {
+        1 -> address.value.isNotBlank() && size.value.toIntOrNull() != null
+        2 -> uploadedPhotos.value > 0
+        3 -> valuation.value.toDoubleOrNull() != null && sharePrice.value.toDoubleOrNull() != null && totalShares.value.toIntOrNull() != null
+        4 -> true // Review step is always valid
+        else -> false
+    }
 
     MaterialTheme(
         colorScheme = MaterialTheme.colorScheme.copy(
@@ -87,7 +107,6 @@ fun AddPropertyScreen(navController: NavController) {
                     .padding(16.dp)
                     .verticalScroll(rememberScrollState())
             ) {
-                // Progress indicator
                 LinearProgressIndicator(
                     progress = currentStep.toFloat() / totalSteps,
                     modifier = Modifier
@@ -100,7 +119,6 @@ fun AddPropertyScreen(navController: NavController) {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Step indicator
                 Text(
                     "Step $currentStep of $totalSteps",
                     fontFamily = BrickShareFonts.Halcyon,
@@ -110,7 +128,6 @@ fun AddPropertyScreen(navController: NavController) {
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Step title
                 Text(
                     when (currentStep) {
                         1 -> "Property Details"
@@ -126,17 +143,25 @@ fun AddPropertyScreen(navController: NavController) {
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Step content
                 when (currentStep) {
                     1 -> PropertyDetailsStep(address, size)
                     2 -> UploadPhotosStep(uploadedPhotos)
-                    3 -> FinancialInfoStep(valuation, sharePrice)
-                    4 -> ReviewStep(address.value, size.value, valuation.value, sharePrice.value, uploadedPhotos.value)
+                    3 -> FinancialInfoStep(valuation, sharePrice, totalShares)
+                    4 -> ReviewStep(address.value, size.value, valuation.value, sharePrice.value, totalShares.value, uploadedPhotos.value)
+                }
+
+                errorMessage?.let {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = it,
+                        color = MaterialTheme.colorScheme.error,
+                        fontFamily = BrickShareFonts.Halcyon,
+                        fontSize = 14.sp
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // Navigation buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -166,9 +191,45 @@ fun AddPropertyScreen(navController: NavController) {
                     Button(
                         onClick = {
                             if (currentStep < totalSteps) {
-                                currentStep++
+                                if (isStepValid) currentStep++
                             } else {
-                                navController.navigate("dashboard")
+                                isLoading = true
+                                errorMessage = null
+                                coroutineScope.launch {
+                                    try {
+                                        val ownerId = FirebaseAuth.getInstance().currentUser?.uid
+                                            ?: throw IllegalStateException("User not authenticated")
+
+                                        val propertyId = db.collection("properties").document().id
+                                        val tokenId = HederaUtils.createPropertyToken(propertyId, totalShares.value.toInt())
+
+                                        val propertyData = hashMapOf(
+                                            "propertyId" to propertyId,
+                                            "ownerId" to ownerId,
+                                            "tokenId" to tokenId,
+                                            "totalTokens" to totalShares.value.toInt(),
+                                            "pricePerToken" to sharePrice.value.toDouble(),
+                                            "rentalIncomePool" to 0.0,
+                                            "metadata" to hashMapOf(
+                                                "address" to address.value,
+                                                "squareFootage" to size.value.toInt(),
+                                                "valuationReport" to "Valuation: $${valuation.value}"
+                                            ),
+                                            "transactionHistory" to listOf("Created by $ownerId")
+                                        )
+
+                                        db.collection("properties").document(propertyId)
+                                            .set(propertyData)
+                                            .await()
+
+                                        navController.navigate("dashboard")
+                                    } catch (e: Exception) {
+                                        Log.e("AddProperty", "Error: ${e.message}", e)
+                                        errorMessage = "Failed to add property: ${e.message}"
+                                    } finally {
+                                        isLoading = false
+                                    }
+                                }
                             }
                         },
                         modifier = Modifier
@@ -177,14 +238,22 @@ fun AddPropertyScreen(navController: NavController) {
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = HederaGreen
-                        )
+                        ),
+                        enabled = !isLoading && isStepValid
                     ) {
-                        Text(
-                            if (currentStep < totalSteps) "Next" else "Submit",
-                            fontFamily = BrickShareFonts.Halcyon,
-                            fontSize = 16.sp,
-                            color = Color.White
-                        )
+                        if (isLoading) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        } else {
+                            Text(
+                                if (currentStep < totalSteps) "Next" else "Submit",
+                                fontFamily = BrickShareFonts.Halcyon,
+                                fontSize = 16.sp,
+                                color = Color.White
+                            )
+                        }
                     }
                 }
 
@@ -196,10 +265,7 @@ fun AddPropertyScreen(navController: NavController) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PropertyDetailsStep(
-    address: MutableState<String>,
-    size: MutableState<String>
-) {
+fun PropertyDetailsStep(address: MutableState<String>, size: MutableState<String>) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -230,47 +296,11 @@ fun PropertyDetailsStep(
 
         OutlinedTextField(
             value = size.value,
-            onValueChange = { size.value = it },
+            onValueChange = { if (it.isEmpty() || it.toIntOrNull() != null) size.value = it },
             label = { Text("Property Size (sqft)", fontFamily = BrickShareFonts.Halcyon) },
             placeholder = { Text("e.g., 2000", fontFamily = BrickShareFonts.Halcyon) },
             modifier = Modifier.fillMaxWidth(),
             leadingIcon = { Icon(Icons.Default.SquareFoot, contentDescription = null, tint = HederaGreen) },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            shape = RoundedCornerShape(12.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = HederaGreen,
-                unfocusedBorderColor = DeepNavy.copy(alpha = 0.3f),
-                focusedTextColor = DeepNavy,
-                unfocusedTextColor = DeepNavy,
-                cursorColor = HederaGreen
-            )
-        )
-
-        OutlinedTextField(
-            value = "",
-            onValueChange = { },
-            label = { Text("Number of Bedrooms", fontFamily = BrickShareFonts.Halcyon) },
-            placeholder = { Text("e.g., 3", fontFamily = BrickShareFonts.Halcyon) },
-            modifier = Modifier.fillMaxWidth(),
-            leadingIcon = { Icon(Icons.Default.Bed, contentDescription = null, tint = HederaGreen) },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            shape = RoundedCornerShape(12.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = HederaGreen,
-                unfocusedBorderColor = DeepNavy.copy(alpha = 0.3f),
-                focusedTextColor = DeepNavy,
-                unfocusedTextColor = DeepNavy,
-                cursorColor = HederaGreen
-            )
-        )
-
-        OutlinedTextField(
-            value = "",
-            onValueChange = { },
-            label = { Text("Number of Bathrooms", fontFamily = BrickShareFonts.Halcyon) },
-            placeholder = { Text("e.g., 2", fontFamily = BrickShareFonts.Halcyon) },
-            modifier = Modifier.fillMaxWidth(),
-            leadingIcon = { Icon(Icons.Default.Bathtub, contentDescription = null, tint = HederaGreen) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             shape = RoundedCornerShape(12.dp),
             colors = OutlinedTextFieldDefaults.colors(
@@ -337,34 +367,6 @@ fun UploadPhotosStep(uploadedPhotos: MutableState<Int>) {
             }
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            repeat(3) { index ->
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(100.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(HederaGreen.copy(alpha = 0.1f))
-                        .border(
-                            width = 1.dp,
-                            color = HederaGreen.copy(alpha = 0.5f),
-                            shape = RoundedCornerShape(8.dp)
-                        )
-                        .clickable { uploadedPhotos.value++ },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = "Add Photo",
-                        tint = HederaGreen
-                    )
-                }
-            }
-        }
-
         if (uploadedPhotos.value > 0) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
@@ -381,7 +383,8 @@ fun UploadPhotosStep(uploadedPhotos: MutableState<Int>) {
 @Composable
 fun FinancialInfoStep(
     valuation: MutableState<String>,
-    sharePrice: MutableState<String>
+    sharePrice: MutableState<String>,
+    totalShares: MutableState<String>
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -396,47 +399,11 @@ fun FinancialInfoStep(
 
         OutlinedTextField(
             value = valuation.value,
-            onValueChange = { valuation.value = it },
+            onValueChange = { if (it.isEmpty() || it.toDoubleOrNull() != null) valuation.value = it },
             label = { Text("Property Valuation ($)", fontFamily = BrickShareFonts.Halcyon) },
             placeholder = { Text("e.g., 100000", fontFamily = BrickShareFonts.Halcyon) },
             modifier = Modifier.fillMaxWidth(),
             leadingIcon = { Icon(Icons.Default.AttachMoney, contentDescription = null, tint = HederaGreen) },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            shape = RoundedCornerShape(12.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = HederaGreen,
-                unfocusedBorderColor = DeepNavy.copy(alpha = 0.3f),
-                focusedTextColor = DeepNavy,
-                unfocusedTextColor = DeepNavy,
-                cursorColor = HederaGreen
-            )
-        )
-
-        OutlinedTextField(
-            value = sharePrice.value,
-            onValueChange = { sharePrice.value = it },
-            label = { Text("Share Price ($)", fontFamily = BrickShareFonts.Halcyon) },
-            placeholder = { Text("e.g., 50", fontFamily = BrickShareFonts.Halcyon) },
-            modifier = Modifier.fillMaxWidth(),
-            leadingIcon = { Icon(Icons.Default.Paid, contentDescription = null, tint = HederaGreen) },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            shape = RoundedCornerShape(12.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = HederaGreen,
-                unfocusedBorderColor = DeepNavy.copy(alpha = 0.3f),
-                focusedTextColor = DeepNavy,
-                unfocusedTextColor = DeepNavy,
-                cursorColor = HederaGreen
-            )
-        )
-
-        OutlinedTextField(
-            value = "",
-            onValueChange = { },
-            label = { Text("Expected ROI (%)", fontFamily = BrickShareFonts.Halcyon) },
-            placeholder = { Text("e.g., 5.2", fontFamily = BrickShareFonts.Halcyon) },
-            modifier = Modifier.fillMaxWidth(),
-            leadingIcon = { Icon(Icons.Default.TrendingUp, contentDescription = null, tint = HederaGreen) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             shape = RoundedCornerShape(12.dp),
             colors = OutlinedTextFieldDefaults.colors(
@@ -449,8 +416,26 @@ fun FinancialInfoStep(
         )
 
         OutlinedTextField(
-            value = "",
-            onValueChange = { },
+            value = sharePrice.value,
+            onValueChange = { if (it.isEmpty() || it.toDoubleOrNull() != null) sharePrice.value = it },
+            label = { Text("Share Price ($)", fontFamily = BrickShareFonts.Halcyon) },
+            placeholder = { Text("e.g., 50", fontFamily = BrickShareFonts.Halcyon) },
+            modifier = Modifier.fillMaxWidth(),
+            leadingIcon = { Icon(Icons.Default.Paid, contentDescription = null, tint = HederaGreen) },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            shape = RoundedCornerShape(12.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = HederaGreen,
+                unfocusedBorderColor = DeepNavy.copy(alpha = 0.3f),
+                focusedTextColor = DeepNavy,
+                unfocusedTextColor = DeepNavy,
+                cursorColor = HederaGreen
+            )
+        )
+
+        OutlinedTextField(
+            value = totalShares.value,
+            onValueChange = { if (it.isEmpty() || it.toIntOrNull() != null) totalShares.value = it },
             label = { Text("Total Shares", fontFamily = BrickShareFonts.Halcyon) },
             placeholder = { Text("e.g., 100", fontFamily = BrickShareFonts.Halcyon) },
             modifier = Modifier.fillMaxWidth(),
@@ -474,6 +459,7 @@ fun ReviewStep(
     size: String,
     valuation: String,
     sharePrice: String,
+    totalShares: String,
     photoCount: Int
 ) {
     Column(
@@ -499,35 +485,12 @@ fun ReviewStep(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                ReviewItem(
-                    title = "Property Address",
-                    value = address.ifEmpty { "Not provided" },
-                    icon = Icons.Default.LocationOn
-                )
-
-                ReviewItem(
-                    title = "Property Size",
-                    value = if (size.isNotEmpty()) "$size sqft" else "Not provided",
-                    icon = Icons.Default.SquareFoot
-                )
-
-                ReviewItem(
-                    title = "Photo Uploads",
-                    value = "$photoCount photos",
-                    icon = Icons.Default.PhotoLibrary
-                )
-
-                ReviewItem(
-                    title = "Property Valuation",
-                    value = if (valuation.isNotEmpty()) "$$valuation" else "Not provided",
-                    icon = Icons.Default.AttachMoney
-                )
-
-                ReviewItem(
-                    title = "Share Price",
-                    value = if (sharePrice.isNotEmpty()) "$$sharePrice per share" else "Not provided",
-                    icon = Icons.Default.Paid
-                )
+                ReviewItem("Property Address", address.ifEmpty { "Not provided" }, Icons.Default.LocationOn)
+                ReviewItem("Property Size", if (size.isNotEmpty()) "$size sqft" else "Not provided", Icons.Default.SquareFoot)
+                ReviewItem("Photo Uploads", "$photoCount photos", Icons.Default.PhotoLibrary)
+                ReviewItem("Property Valuation", if (valuation.isNotEmpty()) "$$valuation" else "Not provided", Icons.Default.AttachMoney)
+                ReviewItem("Share Price", if (sharePrice.isNotEmpty()) "$$sharePrice per share" else "Not provided", Icons.Default.Paid)
+                ReviewItem("Total Shares", if (totalShares.isNotEmpty()) totalShares else "Not provided", Icons.Default.Group)
             }
         }
 
@@ -544,45 +507,16 @@ fun ReviewStep(
 }
 
 @Composable
-fun ReviewItem(
-    title: String,
-    value: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector
-) {
+fun ReviewItem(title: String, value: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = HederaGreen,
-            modifier = Modifier.size(24.dp)
-        )
-
+        Icon(icon, contentDescription = null, tint = HederaGreen, modifier = Modifier.size(24.dp))
         Spacer(modifier = Modifier.width(12.dp))
-
         Column {
-            Text(
-                title,
-                fontFamily = BrickShareFonts.Halcyon,
-                fontSize = 14.sp,
-                color = DeepNavy.copy(alpha = 0.7f)
-            )
-
-            Text(
-                value,
-                fontFamily = BrickShareFonts.Halcyon,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = DeepNavy
-            )
+            Text(title, fontFamily = BrickShareFonts.Halcyon, fontSize = 14.sp, color = DeepNavy.copy(alpha = 0.7f))
+            Text(value, fontFamily = BrickShareFonts.Halcyon, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = DeepNavy)
         }
     }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun PreviewAddPropertyScreen() {
-    AddPropertyScreen(navController = rememberNavController())
 }
