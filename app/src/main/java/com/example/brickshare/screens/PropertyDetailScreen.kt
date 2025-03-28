@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -20,7 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -29,18 +30,88 @@ import com.example.brickshare.ui.theme.BrickShareFonts
 import com.example.brickshare.ui.theme.HederaGreen
 import com.example.brickshare.ui.theme.DeepNavy
 import com.example.brickshare.ui.theme.BuildingBlocksWhite
+import com.example.brickshare.viewmodel.UserViewModel
 import com.google.accompanist.pager.ExperimentalPagerApi
 import com.google.accompanist.pager.HorizontalPager
 import com.google.accompanist.pager.HorizontalPagerIndicator
 import com.google.accompanist.pager.rememberPagerState
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.navigation.compose.rememberNavController
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.ktx.Firebase
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalPagerApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun PropertyDetailScreen(navController: NavController, propertyId: String) {
+fun PropertyDetailScreen(
+    navController: NavController,
+    propertyId: String,
+    userViewModel: UserViewModel // Added to check ownership
+) {
+    val scope = rememberCoroutineScope()
+    val userId by userViewModel.userId.collectAsState()
+    val userRole by userViewModel.userRole.collectAsState()
+    var property by remember { mutableStateOf<Property?>(null) }
     var isFavorite by remember { mutableStateOf(false) }
+    var isEditing by remember { mutableStateOf(false) }
+    var description by remember { mutableStateOf("") }
+    val db = Firebase.firestore
+
+    LaunchedEffect(propertyId, userId) {
+        scope.launch {
+            println("Fetching property with ID: $propertyId for user: $userId")
+            try {
+                val propertyDoc = withContext(Dispatchers.IO) {
+                    db.collection("properties")
+                        .document(propertyId)
+                        .get()
+                        .await()
+                }
+
+                println("Property Doc Data: ${propertyDoc.data}")
+
+                if (propertyDoc.exists()) {
+                    val ownerId = propertyDoc.getString("ownerId") ?: "Unknown"
+                    property = Property(
+                        id = propertyId,
+                        name = propertyDoc.getString("metadata.address")?.let { "Property at $it" } ?: "Property $propertyId",
+                        address = propertyDoc.getString("metadata.address") ?: "Unknown Address",
+                        value = 50000, // Hardcoded for now, fetch from Firestore if added
+                        totalHbarCollected = propertyDoc.getDouble("totalHbarCollected") ?: 0.0,
+                        investors = emptyList(),
+                        isOwner = userId == ownerId
+                    )
+                    description = propertyDoc.getString("metadata.description") ?: "No description available"
+                    println("Property $propertyId fetched successfully")
+                } else {
+                    property = Property(
+                        id = propertyId,
+                        name = "Not Found",
+                        address = "Property does not exist",
+                        value = 0,
+                        totalHbarCollected = 0.0,
+                        investors = emptyList(),
+                        isOwner = false
+                    )
+                    description = "Property not found"
+                    println("Property $propertyId not found in Firestore")
+                }
+            } catch (e: Exception) {
+                println("Error fetching property $propertyId: ${e.message}")
+                property = Property(
+                    id = propertyId,
+                    name = "Error",
+                    address = "Failed to load",
+                    value = 0,
+                    totalHbarCollected = 0.0,
+                    investors = emptyList(),
+                    isOwner = false
+                )
+                description = "Error loading property"
+            }
+        }
+    }
 
     MaterialTheme(
         colorScheme = MaterialTheme.colorScheme.copy(
@@ -101,163 +172,242 @@ fun PropertyDetailScreen(navController: NavController, propertyId: String) {
                     .padding(paddingValues)
                     .verticalScroll(rememberScrollState())
             ) {
-                // Image Gallery with Pager
-                Box(modifier = Modifier.height(250.dp)) {
-                    val pagerState = rememberPagerState()
+                if (property == null) {
+                    CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+                } else {
+                    // Image Gallery with Pager
+                    Box(modifier = Modifier.height(250.dp)) {
+                        val pagerState = rememberPagerState()
 
-                    HorizontalPager(
-                        count = 3,
-                        state = pagerState,
-                        modifier = Modifier.fillMaxSize()
-                    ) { page ->
-                        Image(
-                            painter = painterResource(id = R.drawable.placeholder_property),
-                            contentDescription = "Property Image ${page + 1}",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    }
-
-                    // Pager Indicator
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(16.dp)
-                            .background(
-                                color = DeepNavy.copy(alpha = 0.3f),
-                                shape = RoundedCornerShape(16.dp)
+                        HorizontalPager(
+                            count = 3,
+                            state = pagerState,
+                            modifier = Modifier.fillMaxSize()
+                        ) { page ->
+                            Image(
+                                painter = painterResource(id = R.drawable.placeholder_property),
+                                contentDescription = "Property Image ${page + 1}",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
                             )
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        HorizontalPagerIndicator(
-                            pagerState = pagerState,
-                            activeColor = HederaGreen,
-                            inactiveColor = BuildingBlocksWhite.copy(alpha = 0.5f)
-                        )
-                    }
-                }
-
-                // Main Content
-                Column(modifier = Modifier.padding(16.dp)) {
-                    // Property Title and Address
-                    Text(
-                        "123 Main Street, Copenhagen",
-                        style = TextStyle(
-                            fontFamily = BrickShareFonts.Halcyon,
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = DeepNavy
-                        )
-                    )
-
-                    Text(
-                        "Property ID: $propertyId",
-                        fontFamily = BrickShareFonts.Halcyon,
-                        fontSize = 14.sp,
-                        color = DeepNavy.copy(alpha = 0.7f)
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Stats Cards
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        StatCard(title = "Price/Share", value = "$50", modifier = Modifier.weight(1f))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        StatCard(title = "Total Shares", value = "100", modifier = Modifier.weight(1f))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        StatCard(title = "ROI", value = "5%", modifier = Modifier.weight(1f))
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Map Preview
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(180.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(HederaGreen.copy(alpha = 0.1f))
-                    ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.placeholder_property),
-                            contentDescription = "Property Location Map",
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(4.dp)
-                                .clip(RoundedCornerShape(8.dp)),
-                            contentScale = ContentScale.Crop
-                        )
+                        }
 
                         Box(
                             modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .padding(12.dp)
+                                .align(Alignment.BottomCenter)
+                                .padding(16.dp)
                                 .background(
-                                    DeepNavy.copy(alpha = 0.7f),
-                                    RoundedCornerShape(4.dp)
+                                    color = DeepNavy.copy(alpha = 0.3f),
+                                    shape = RoundedCornerShape(16.dp)
                                 )
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
-                            Text(
-                                "Copenhagen, Denmark",
-                                fontFamily = BrickShareFonts.Halcyon,
-                                fontSize = 12.sp,
-                                color = BuildingBlocksWhite
+                            HorizontalPagerIndicator(
+                                pagerState = pagerState,
+                                activeColor = HederaGreen,
+                                inactiveColor = BuildingBlocksWhite.copy(alpha = 0.5f)
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Description
-                    Text(
-                        "Description",
-                        fontFamily = BrickShareFonts.Halcyon,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = DeepNavy
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        "Beautiful property located in the heart of Copenhagen. This prime real estate investment offers exceptional returns with minimal risk. The property has been fully renovated with premium materials and features modern amenities throughout.",
-                        fontFamily = BrickShareFonts.Halcyon,
-                        fontSize = 16.sp,
-                        color = DeepNavy.copy(alpha = 0.8f)
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Property Features
-                    PropertyFeaturesList()
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    // Buy Shares Button
-                    Button(
-                        onClick = { navController.navigate("buy_shares/$propertyId") },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = HederaGreen
-                        )
-                    ) {
+                    // Main Content
+                    Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            "Buy Shares",
-                            fontFamily = BrickShareFonts.Halcyon,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            property!!.name,
+                            style = TextStyle(
+                                fontFamily = BrickShareFonts.Halcyon,
+                                fontSize = 28.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = DeepNavy
+                            )
                         )
-                    }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            "Property ID: $propertyId",
+                            fontFamily = BrickShareFonts.Halcyon,
+                            fontSize = 14.sp,
+                            color = DeepNavy.copy(alpha = 0.7f)
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            StatCard(title = "Price/Share", value = "$50", modifier = Modifier.weight(1f))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            StatCard(title = "Total Shares", value = "100", modifier = Modifier.weight(1f))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            StatCard(title = "ROI", value = "5%", modifier = Modifier.weight(1f))
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Map Preview (placeholder)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(180.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(HederaGreen.copy(alpha = 0.1f))
+                        ) {
+                            Image(
+                                painter = painterResource(id = R.drawable.placeholder_property),
+                                contentDescription = "Property Location Map",
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(4.dp)
+                                    .clip(RoundedCornerShape(8.dp)),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .padding(12.dp)
+                                    .background(
+                                        DeepNavy.copy(alpha = 0.7f),
+                                        RoundedCornerShape(4.dp)
+                                    )
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    property!!.address,
+                                    fontFamily = BrickShareFonts.Halcyon,
+                                    fontSize = 12.sp,
+                                    color = BuildingBlocksWhite
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Description Section
+                        Text(
+                            "Description",
+                            fontFamily = BrickShareFonts.Halcyon,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = DeepNavy
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        if (property!!.isOwner && isEditing) {
+                            TextField(
+                                value = description,
+                                onValueChange = { description = it },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(120.dp),
+                                textStyle = TextStyle(
+                                    fontFamily = BrickShareFonts.Halcyon,
+                                    fontSize = 16.sp,
+                                    color = DeepNavy
+                                ),
+                                label = { Text("Property Description") },
+                                colors = TextFieldDefaults.colors(
+                                    focusedContainerColor = Color.White,
+                                    unfocusedContainerColor = Color.White,
+                                    focusedIndicatorColor = HederaGreen,
+                                    unfocusedIndicatorColor = DeepNavy.copy(alpha = 0.5f)
+                                )
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        try {
+                                            db.collection("properties")
+                                                .document(propertyId)
+                                                .update("metadata.description", description)
+                                                .await()
+                                            println("Description updated for $propertyId")
+                                            isEditing = false
+                                        } catch (e: Exception) {
+                                            println("Error updating description: ${e.message}")
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.align(Alignment.End),
+                                colors = ButtonDefaults.buttonColors(containerColor = HederaGreen)
+                            ) {
+                                Text(
+                                    "Save",
+                                    fontFamily = BrickShareFonts.Halcyon,
+                                    fontSize = 16.sp,
+                                    color = Color.White
+                                )
+                            }
+                        } else {
+                            Text(
+                                description,
+                                fontFamily = BrickShareFonts.Halcyon,
+                                fontSize = 16.sp,
+                                color = DeepNavy.copy(alpha = 0.8f)
+                            )
+                            if (property!!.isOwner) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Button(
+                                    onClick = { isEditing = true },
+                                    modifier = Modifier.align(Alignment.End),
+                                    colors = ButtonDefaults.buttonColors(containerColor = HederaGreen)
+                                ) {
+                                    Text(
+                                        "Edit Description",
+                                        fontFamily = BrickShareFonts.Halcyon,
+                                        fontSize = 16.sp,
+                                        color = Color.White
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        PropertyFeaturesList()
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        // Action Button
+                        if (!property!!.isOwner) {
+                            Button(
+                                onClick = { navController.navigate("buy_shares/$propertyId") },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(56.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = HederaGreen)
+                            ) {
+                                Text(
+                                    "Buy Shares",
+                                    fontFamily = BrickShareFonts.Halcyon,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        } else {
+                            Button(
+                                onClick = { navController.navigate("manage_property/$propertyId") },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(56.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = HederaGreen)
+                            ) {
+                                Text(
+                                    "Manage Property",
+                                    fontFamily = BrickShareFonts.Halcyon,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
                 }
             }
         }
@@ -313,10 +463,8 @@ fun PropertyFeaturesList() {
             fontWeight = FontWeight.Bold,
             color = DeepNavy
         )
-
         Spacer(modifier = Modifier.height(8.dp))
-
-        PropertyFeatureItem("Size", "120 m²")
+        PropertyFeatureItem("Size", "120 m²") // Hardcoded for now, fetch later if needed
         PropertyFeatureItem("Bedrooms", "3")
         PropertyFeatureItem("Bathrooms", "2")
         PropertyFeatureItem("Year Built", "2015")
@@ -346,13 +494,4 @@ fun PropertyFeatureItem(feature: String, value: String) {
             color = DeepNavy
         )
     }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun PreviewPropertyDetailScreen() {
-    PropertyDetailScreen(
-        navController = rememberNavController(),
-        propertyId = "1"
-    )
 }

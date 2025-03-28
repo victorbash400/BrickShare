@@ -1,6 +1,6 @@
 package com.example.brickshare.screens
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -11,11 +11,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -26,16 +24,8 @@ import com.example.brickshare.ui.theme.BuildingBlocksWhite
 import com.example.brickshare.viewmodel.UserViewModel
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import kotlinx.coroutines.withContext
-
-data class PropertyInvestor(
-    val name: String,
-    val hederaAccountId: String,
-    val shares: Int
-)
 
 data class Property(
     val id: String,
@@ -47,80 +37,56 @@ data class Property(
     val isOwner: Boolean
 )
 
+data class PropertyInvestor(
+    val name: String,
+    val hederaAccountId: String,
+    val shares: Int
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ManagePropertyScreen(
     navController: NavController,
-    propertyId: String,
+    propertyId: String, // Ignored for now
     userViewModel: UserViewModel
 ) {
     val scope = rememberCoroutineScope()
     val userId by userViewModel.userId.collectAsState()
-    var property by remember { mutableStateOf<Property?>(null) }
+    var properties by remember { mutableStateOf<List<Property>>(emptyList()) }
     val db = Firebase.firestore
 
-    // Fetch property data off the main thread, filtering by ownership
-    LaunchedEffect(propertyId, userId) {
+    LaunchedEffect(userId) {
         scope.launch {
             if (userId == null) {
                 println("User ID is null, skipping fetch")
                 return@launch
             }
 
+            println("Fetching properties for user: $userId")
             try {
-                // Fetch the property document on IO thread
-                val propertyDoc = withContext(Dispatchers.IO) {
-                    db.collection("properties")
-                        .document(propertyId)
-                        .get()
-                        .await()
-                }
+                val propertiesSnapshot = db.collection("properties")
+                    .whereEqualTo("ownerId", userId)
+                    .get()
+                    .await()
 
-                // Check if the document exists and user is the owner
-                val ownerId = propertyDoc.getString("ownerId") ?: "Unknown"
-                val isOwner = userId == ownerId
-
-                if (!propertyDoc.exists() || !isOwner) {
-                    // Property doesn't exist or user isn't the owner
-                    property = Property(
-                        id = propertyId,
-                        name = "",
-                        address = "",
-                        value = 0,
-                        totalHbarCollected = 0.0,
+                properties = propertiesSnapshot.documents.mapNotNull { propDoc ->
+                    val ownerId = propDoc.getString("ownerId") ?: "Unknown"
+                    val isOwner = userId == ownerId
+                    if (!isOwner) null // Shouldn’t happen due to query, but safety first
+                    else Property(
+                        id = propDoc.id,
+                        name = propDoc.getString("metadata.address")?.let { "Property at $it" } ?: "Property ${propDoc.id}",
+                        address = propDoc.getString("metadata.address") ?: "Unknown Address",
+                        value = 50000, // Hardcoded for now
+                        totalHbarCollected = propDoc.getDouble("totalHbarCollected") ?: 0.0,
                         investors = emptyList(),
-                        isOwner = false
-                    )
-                    println("Property $propertyId not found or not owned by $userId")
-                } else {
-                    // Fetch owner email if needed (optional, kept for consistency)
-                    val ownerEmail = withContext(Dispatchers.IO) {
-                        val ownerDoc = db.collection("users").document(ownerId).get().await()
-                        ownerDoc.getString("email")?.split("@")?.get(0) ?: "Unknown"
-                    }
-
-                    property = Property(
-                        id = propertyId,
-                        name = propertyDoc.getString("metadata.address")?.let { "Property at $it" } ?: "Property $propertyId",
-                        address = propertyDoc.getString("metadata.address") ?: "Unknown Address",
-                        value = 50000, // Hardcoded for now, add to Firestore if needed
-                        totalHbarCollected = propertyDoc.getDouble("totalHbarCollected") ?: 0.0,
-                        investors = emptyList(), // TODO: Add investors to properties/{propertyId}
                         isOwner = true
                     )
-                    println("Property $propertyId fetched successfully for owner $userId")
                 }
+                println("Fetched ${properties.size} properties for user $userId")
             } catch (e: Exception) {
-                println("Error fetching property $propertyId: ${e.message}")
-                property = Property(
-                    id = propertyId,
-                    name = "Error",
-                    address = "Failed to load",
-                    value = 0,
-                    totalHbarCollected = 0.0,
-                    investors = emptyList(),
-                    isOwner = false
-                )
+                println("Error fetching properties: ${e.message}")
+                properties = emptyList()
             }
         }
     }
@@ -140,7 +106,7 @@ fun ManagePropertyScreen(
                 TopAppBar(
                     title = {
                         Text(
-                            "Manage Property",
+                            "Manage My Properties",
                             fontFamily = BrickShareFonts.Halcyon,
                             fontSize = 24.sp,
                             fontWeight = FontWeight.Bold,
@@ -178,12 +144,12 @@ fun ManagePropertyScreen(
                             modifier = Modifier.align(Alignment.CenterHorizontally)
                         )
                     }
-                    property == null -> {
+                    properties.isEmpty() && userId != null -> {
                         CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
                     }
-                    !property!!.isOwner -> {
+                    properties.isEmpty() -> {
                         Text(
-                            text = "You do not own this property",
+                            text = "You don’t own any properties yet",
                             fontFamily = BrickShareFonts.Halcyon,
                             fontSize = 16.sp,
                             color = DeepNavy,
@@ -191,149 +157,64 @@ fun ManagePropertyScreen(
                         )
                     }
                     else -> {
-                        // Property Info Card
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 16.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                            colors = CardColors(
-                                containerColor = Color.White,
-                                contentColor = DeepNavy,
-                                disabledContainerColor = Color.Gray,
-                                disabledContentColor = Color.LightGray
-                            )
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    text = property!!.name,
-                                    style = TextStyle(
-                                        fontFamily = BrickShareFonts.Halcyon,
-                                        fontSize = 28.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = DeepNavy
-                                    )
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = property!!.address,
-                                    fontFamily = BrickShareFonts.Halcyon,
-                                    fontSize = 16.sp,
-                                    color = DeepNavy.copy(alpha = 0.7f)
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Text(
-                                    text = "$${property!!.value}",
-                                    style = TextStyle(
-                                        fontFamily = BrickShareFonts.Halcyon,
-                                        fontSize = 24.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = HederaGreen
-                                    )
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
-                                LinearProgressIndicator(
-                                    progress = 1f,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    color = HederaGreen,
-                                    trackColor = DeepNavy.copy(alpha = 0.2f)
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "Fully Funded",
-                                    fontFamily = BrickShareFonts.Halcyon,
-                                    fontSize = 14.sp,
-                                    color = HederaGreen,
-                                    textAlign = TextAlign.End,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                        }
-
-                        // Investors Section
-                        Text(
-                            text = "Investors",
-                            fontFamily = BrickShareFonts.Halcyon,
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = DeepNavy,
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        )
-
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp)),
-                            shape = RoundedCornerShape(12.dp),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                            colors = CardColors(
-                                containerColor = Color.White,
-                                contentColor = DeepNavy,
-                                disabledContainerColor = Color.Gray,
-                                disabledContentColor = Color.LightGray
-                            )
-                        ) {
-                            Text(
-                                text = "Investors not available (TODO: Add to Firestore)",
-                                fontFamily = BrickShareFonts.Halcyon,
-                                fontSize = 16.sp,
-                                color = DeepNavy.copy(alpha = 0.7f),
-                                modifier = Modifier.padding(16.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.weight(1f))
-
-                        // Distribution Action
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 16.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                            colors = CardColors(
-                                containerColor = Color.White,
-                                contentColor = DeepNavy,
-                                disabledContainerColor = Color.Gray,
-                                disabledContentColor = Color.LightGray
-                            )
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    text = "Ready to distribute profits?",
-                                    fontFamily = BrickShareFonts.Halcyon,
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = DeepNavy
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "You have ${property!!.totalHbarCollected} HBAR available to distribute",
-                                    fontFamily = BrickShareFonts.Halcyon,
-                                    fontSize = 14.sp,
-                                    color = DeepNavy.copy(alpha = 0.7f)
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Button(
-                                    onClick = { /* TODO: Call transferToOwner and distributeHbar later */ },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = ButtonDefaults.buttonColors(containerColor = HederaGreen),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Text(
-                                        text = "Distribute ${property!!.totalHbarCollected} HBAR",
-                                        fontFamily = BrickShareFonts.Halcyon,
-                                        fontSize = 16.sp,
-                                        color = Color.White,
-                                        modifier = Modifier.padding(vertical = 8.dp)
-                                    )
+                            items(properties) { property ->
+                                PropertyListItem(property) {
+                                    navController.navigate("manage_property/${property.id}")
                                 }
                             }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun PropertyListItem(property: Property, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardColors(
+            containerColor = Color.White,
+            contentColor = DeepNavy,
+            disabledContainerColor = Color.Gray,
+            disabledContentColor = Color.LightGray
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = property.name,
+                style = TextStyle(
+                    fontFamily = BrickShareFonts.Halcyon,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = DeepNavy
+                )
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = property.address,
+                fontFamily = BrickShareFonts.Halcyon,
+                fontSize = 14.sp,
+                color = DeepNavy.copy(alpha = 0.7f)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "$${property.value}",
+                style = TextStyle(
+                    fontFamily = BrickShareFonts.Halcyon,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = HederaGreen
+                )
+            )
         }
     }
 }

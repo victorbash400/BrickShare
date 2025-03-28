@@ -6,11 +6,10 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import com.example.brickshare.ui.theme.BrickShareTheme
-import com.example.brickshare.viewmodel.UserViewModel
 import androidx.lifecycle.lifecycleScope
 import com.example.brickshare.navigation.Navigation
-import com.google.android.gms.auth.api.identity.Identity
+import com.example.brickshare.ui.theme.BrickShareTheme
+import com.example.brickshare.viewmodel.UserViewModel
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
@@ -32,15 +31,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Configure Google Sign-In
+        auth = FirebaseAuth.getInstance()
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestIdToken("851529847458-u9ei43n2hmnth6ge71bf112368ikvctc.apps.googleusercontent.com")
             .requestEmail()
             .build()
         googleSignInClient = GoogleSignIn.getClient(this, gso)
-        auth = FirebaseAuth.getInstance()
 
-        // Enable edge-to-edge display
         setContent {
             BrickShareTheme(darkTheme = true) {
                 Navigation(

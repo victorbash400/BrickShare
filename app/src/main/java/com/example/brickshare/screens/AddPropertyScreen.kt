@@ -31,7 +31,6 @@ import com.example.brickshare.ui.theme.HederaGreen
 import com.example.brickshare.ui.theme.DeepNavy
 import com.example.brickshare.ui.theme.BuildingBlocksWhite
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.launch
@@ -45,6 +44,7 @@ fun AddPropertyScreen(navController: NavController) {
 
     val address = remember { mutableStateOf("") }
     val size = remember { mutableStateOf("") }
+    val description = remember { mutableStateOf("") } // New field
     val valuation = remember { mutableStateOf("") }
     val sharePrice = remember { mutableStateOf("") }
     val totalShares = remember { mutableStateOf("") }
@@ -56,10 +56,10 @@ fun AddPropertyScreen(navController: NavController) {
 
     // Validation for enabling Next/Submit button
     val isStepValid = when (currentStep) {
-        1 -> address.value.isNotBlank() && size.value.toIntOrNull() != null
+        1 -> address.value.isNotBlank() && size.value.toIntOrNull() != null && description.value.isNotBlank()
         2 -> uploadedPhotos.value > 0
         3 -> valuation.value.toDoubleOrNull() != null && sharePrice.value.toDoubleOrNull() != null && totalShares.value.toIntOrNull() != null
-        4 -> true // Review step is always valid
+        4 -> true
         else -> false
     }
 
@@ -144,10 +144,10 @@ fun AddPropertyScreen(navController: NavController) {
                 Spacer(modifier = Modifier.height(24.dp))
 
                 when (currentStep) {
-                    1 -> PropertyDetailsStep(address, size)
+                    1 -> PropertyDetailsStep(address, size, description)
                     2 -> UploadPhotosStep(uploadedPhotos)
                     3 -> FinancialInfoStep(valuation, sharePrice, totalShares)
-                    4 -> ReviewStep(address.value, size.value, valuation.value, sharePrice.value, totalShares.value, uploadedPhotos.value)
+                    4 -> ReviewStep(address.value, size.value, description.value, valuation.value, sharePrice.value, totalShares.value, uploadedPhotos.value)
                 }
 
                 errorMessage?.let {
@@ -213,7 +213,8 @@ fun AddPropertyScreen(navController: NavController) {
                                             "metadata" to hashMapOf(
                                                 "address" to address.value,
                                                 "squareFootage" to size.value.toInt(),
-                                                "valuationReport" to "Valuation: $${valuation.value}"
+                                                "valuationReport" to "Valuation: $${valuation.value}",
+                                                "description" to description.value // Added description
                                             ),
                                             "transactionHistory" to listOf("Created by $ownerId")
                                         )
@@ -265,7 +266,7 @@ fun AddPropertyScreen(navController: NavController) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PropertyDetailsStep(address: MutableState<String>, size: MutableState<String>) {
+fun PropertyDetailsStep(address: MutableState<String>, size: MutableState<String>, description: MutableState<String>) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -302,6 +303,25 @@ fun PropertyDetailsStep(address: MutableState<String>, size: MutableState<String
             modifier = Modifier.fillMaxWidth(),
             leadingIcon = { Icon(Icons.Default.SquareFoot, contentDescription = null, tint = HederaGreen) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            shape = RoundedCornerShape(12.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = HederaGreen,
+                unfocusedBorderColor = DeepNavy.copy(alpha = 0.3f),
+                focusedTextColor = DeepNavy,
+                unfocusedTextColor = DeepNavy,
+                cursorColor = HederaGreen
+            )
+        )
+
+        OutlinedTextField(
+            value = description.value,
+            onValueChange = { description.value = it },
+            label = { Text("Property Description", fontFamily = BrickShareFonts.Halcyon) },
+            placeholder = { Text("e.g., Modern renovated property...", fontFamily = BrickShareFonts.Halcyon) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(120.dp),
+            maxLines = 5,
             shape = RoundedCornerShape(12.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = HederaGreen,
@@ -457,6 +477,7 @@ fun FinancialInfoStep(
 fun ReviewStep(
     address: String,
     size: String,
+    description: String, // Added description
     valuation: String,
     sharePrice: String,
     totalShares: String,
@@ -487,6 +508,7 @@ fun ReviewStep(
             ) {
                 ReviewItem("Property Address", address.ifEmpty { "Not provided" }, Icons.Default.LocationOn)
                 ReviewItem("Property Size", if (size.isNotEmpty()) "$size sqft" else "Not provided", Icons.Default.SquareFoot)
+                ReviewItem("Description", description.ifEmpty { "Not provided" }, Icons.Default.Description)
                 ReviewItem("Photo Uploads", "$photoCount photos", Icons.Default.PhotoLibrary)
                 ReviewItem("Property Valuation", if (valuation.isNotEmpty()) "$$valuation" else "Not provided", Icons.Default.AttachMoney)
                 ReviewItem("Share Price", if (sharePrice.isNotEmpty()) "$$sharePrice per share" else "Not provided", Icons.Default.Paid)

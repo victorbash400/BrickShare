@@ -37,14 +37,15 @@ fun Navigation(
         "portfolio",
         "income",
         "profile",
-        "add_property"
+        "add_property",
+        "manage_property"
     )
     val isBottomBarVisible = userRole != null && (
             currentRoute in mainAppRoutes ||
                     currentRoute?.startsWith("manage_property/") == true
             )
 
-    val startDestination = "welcome"  // Back to static start, as in your original
+    val startDestination = "welcome"
 
     Scaffold(
         bottomBar = {
@@ -85,15 +86,22 @@ fun Navigation(
             }
             composable("property_detail/{propertyId}") { backStackEntry ->
                 val propertyId = backStackEntry.arguments?.getString("propertyId") ?: ""
-                PropertyDetailScreen(navController, propertyId)
+                PropertyDetailScreen(navController, propertyId, userViewModel) // Added userViewModel
             }
             composable("add_property") {
                 AddPropertyScreen(navController)
             }
+            composable("manage_property") {
+                if (userId != null) {
+                    ManagePropertyScreen(navController, "", userViewModel)
+                } else {
+                    navController.navigate("welcome")
+                }
+            }
             composable("manage_property/{propertyId}") { backStackEntry ->
                 val propertyId = backStackEntry.arguments?.getString("propertyId") ?: ""
                 if (userId != null) {
-                    ManagePropertyScreen(navController, propertyId, userViewModel)
+                    ManageSinglePropertyScreen(navController, propertyId, userViewModel)
                 } else {
                     navController.navigate("welcome")
                 }

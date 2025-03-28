@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.brickshare.ui.theme.*
 import com.example.brickshare.viewmodel.UserViewModel
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.launch
@@ -39,6 +40,7 @@ fun DashboardScreen(
     var tokenBalances by remember { mutableStateOf<Map<String, Long>>(emptyMap()) }
     var properties by remember { mutableStateOf<List<Triple<String, String, String>>>(emptyList()) }
     val db = Firebase.firestore
+    val username = FirebaseAuth.getInstance().currentUser?.email?.split("@")?.get(0) ?: "User"
 
     // Fetch user and property data
     LaunchedEffect(userId) {
@@ -90,28 +92,30 @@ fun DashboardScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 16.dp, bottom = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = "Welcome back!",
+                        text = "Welcome back, $username!",
                         style = TextStyle(
                             fontFamily = BrickShareFonts.Halcyon,
                             fontWeight = FontWeight.Bold,
                             fontSize = 24.sp,
                             color = DeepNavy
-                        )
+                        ),
+                        modifier = Modifier.weight(1f),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
-                    Spacer(Modifier.weight(1f))
                     IconButton(
-                        onClick = { /* TODO: Navigate to search */ },
+                        onClick = { navController.navigate("profile") },
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape)
                             .background(HederaGreen.copy(alpha = 0.1f))
                     ) {
                         Icon(
-                            Icons.Rounded.Search,
-                            contentDescription = "Search",
+                            Icons.Rounded.AccountCircle,
+                            contentDescription = "Profile",
                             tint = HederaGreen,
                             modifier = Modifier.size(24.dp)
                         )
@@ -125,12 +129,47 @@ fun DashboardScreen(
                 WatchlistSection(userRole, properties, navController)
                 Spacer(Modifier.height(16.dp))
                 HistorySection(navController)
+                Spacer(Modifier.height(16.dp))
+
+                // Change Role Button
+                ElevatedButton(
+                    onClick = { navController.navigate("role_selection") },
+                    modifier = Modifier
+                        .width(200.dp)
+                        .height(50.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.elevatedButtonColors(
+                        containerColor = HederaGreen,
+                        contentColor = Color.White
+                    ),
+                    elevation = ButtonDefaults.elevatedButtonElevation(
+                        defaultElevation = 4.dp,
+                        pressedElevation = 2.dp
+                    )
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "Change Role",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Normal,
+                            fontFamily = BrickShareFonts.Halcyon
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            Icons.Rounded.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
             }
         }
     }
 }
-
-// Rest of the file (WalletCard, BudgetCircle, etc.) remains unchanged
 
 @Composable
 fun WalletCard(userRole: String?, hbarBalance: Double, tokenBalances: Map<String, Long>, navController: NavController) {
@@ -263,7 +302,11 @@ fun WatchlistSection(userRole: String?, properties: List<Triple<String, String, 
         LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             items(properties) { (id, address, price) ->
                 WatchlistCard(address, "N/A", price) {
-                    navController.navigate("property_detail/$id")
+                    if (userRole == "investor") {
+                        navController.navigate("property_detail/$id")
+                    } else {
+                        navController.navigate("manage_property") // Go to list for owners
+                    }
                 }
             }
         }
@@ -327,29 +370,15 @@ fun WatchlistCard(name: String, metric: String, value: String, onClick: () -> Un
 @Composable
 fun HistorySection(navController: NavController) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "History",
-                style = TextStyle(
-                    fontFamily = BrickShareFonts.Halcyon,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp,
-                    color = DeepNavy
-                )
+        Text(
+            text = "History",
+            style = TextStyle(
+                fontFamily = BrickShareFonts.Halcyon,
+                fontWeight = FontWeight.Bold,
+                fontSize = 20.sp,
+                color = DeepNavy
             )
-            Icon(
-                Icons.Rounded.ArrowForward,
-                contentDescription = "See More",
-                tint = HederaGreen,
-                modifier = Modifier
-                    .size(24.dp)
-                    .clickable { navController.navigate("history") }
-            )
-        }
+        )
 
         Spacer(Modifier.height(8.dp))
 

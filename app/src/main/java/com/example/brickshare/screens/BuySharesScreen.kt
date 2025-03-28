@@ -5,26 +5,33 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -56,7 +63,8 @@ fun BuySharesScreen(navController: NavController, propertyId: String) {
     var shareCount by remember { mutableStateOf("") }
     var totalAmount by remember { mutableStateOf(0.0) }
     var selectedPaymentMethod by remember { mutableStateOf("Hedera HBAR") }
-    var expanded by remember { mutableStateOf(false) }
+    var expandedPayment by remember { mutableStateOf(false) }
+    var expandedDetails by remember { mutableStateOf(false) }
     var isPurchaseSuccessful by remember { mutableStateOf(false) }
     var showSuccess by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
@@ -70,7 +78,6 @@ fun BuySharesScreen(navController: NavController, propertyId: String) {
         animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing)
     )
 
-    // Fetch property data and refresh after purchase
     fun fetchPropertyData() {
         coroutineScope.launch {
             Log.d("BuyShares", "Fetching property data for ID: $propertyId")
@@ -113,7 +120,7 @@ fun BuySharesScreen(navController: NavController, propertyId: String) {
                         )
                     },
                     navigationIcon = {
-                        IconButton(onClick = { navController.navigate("portfolio") }) {
+                        IconButton(onClick = { navController.navigateUp() }) {
                             Icon(
                                 Icons.Default.ArrowBack,
                                 contentDescription = "Back",
@@ -135,9 +142,11 @@ fun BuySharesScreen(navController: NavController, propertyId: String) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(16.dp),
+                        .padding(16.dp)
+                        .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(24.dp)
                 ) {
+                    // Property Header Card
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
@@ -153,7 +162,7 @@ fun BuySharesScreen(navController: NavController, propertyId: String) {
                                 .fillMaxWidth()
                         ) {
                             Text(
-                                text = property?.get("metadata.address") as? String ?: "Loading...",
+                                text = property?.get("metadata")?.let { it as Map<*, *> }?.get("address") as? String ?: "Loading...",
                                 style = TextStyle(
                                     fontFamily = BrickShareFonts.Halcyon,
                                     fontSize = 24.sp,
@@ -178,6 +187,94 @@ fun BuySharesScreen(navController: NavController, propertyId: String) {
                                     fontSize = 16.sp,
                                     color = HederaGreen
                                 )
+                            }
+                        }
+                    }
+
+                    // Expandable Property Details Card
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color.White,
+                            contentColor = DeepNavy
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { expandedDetails = !expandedDetails },
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "View Property Details",
+                                    fontFamily = BrickShareFonts.Halcyon,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = DeepNavy
+                                )
+                                Icon(
+                                    imageVector = Icons.Default.ArrowDropDown,
+                                    contentDescription = "Toggle Details",
+                                    tint = HederaGreen,
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .rotate(if (expandedDetails) 180f else 0f) // Flip arrow when expanded
+                                )
+                            }
+                            AnimatedVisibility(
+                                visible = expandedDetails,
+                                enter = expandVertically() + fadeIn(),
+                                exit = shrinkVertically() + fadeOut()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(top = 12.dp)
+                                ) {
+                                    Text(
+                                        text = "Description",
+                                        fontFamily = BrickShareFonts.Halcyon,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = DeepNavy
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = property?.get("metadata")?.let { it as Map<*, *> }?.get("description") as? String ?: "No description available",
+                                        fontFamily = BrickShareFonts.Halcyon,
+                                        fontSize = 14.sp,
+                                        color = DeepNavy.copy(alpha = 0.8f)
+                                        // Removed heightIn restriction for full expandability
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Row(
+                                        horizontalArrangement = Arrangement.End,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        TextButton(
+                                            onClick = { /* TODO: Contact seller logic */ },
+                                            colors = ButtonDefaults.textButtonColors(contentColor = HederaGreen)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.MailOutline,
+                                                contentDescription = "Contact Seller",
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                "Contact Seller",
+                                                fontFamily = BrickShareFonts.Halcyon,
+                                                fontSize = 14.sp
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -209,7 +306,6 @@ fun BuySharesScreen(navController: NavController, propertyId: String) {
                                 color = DeepNavy
                             )
                             Spacer(modifier = Modifier.height(16.dp))
-
                             OutlinedTextField(
                                 value = shareCount,
                                 onValueChange = { newValue ->
@@ -233,9 +329,7 @@ fun BuySharesScreen(navController: NavController, propertyId: String) {
                                     cursorColor = HederaGreen
                                 )
                             )
-
                             Spacer(modifier = Modifier.height(16.dp))
-
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -280,7 +374,6 @@ fun BuySharesScreen(navController: NavController, propertyId: String) {
                                 color = DeepNavy
                             )
                             Spacer(modifier = Modifier.height(16.dp))
-
                             Box(modifier = Modifier.fillMaxWidth()) {
                                 OutlinedTextField(
                                     value = selectedPaymentMethod,
@@ -288,7 +381,7 @@ fun BuySharesScreen(navController: NavController, propertyId: String) {
                                     readOnly = true,
                                     modifier = Modifier.fillMaxWidth(),
                                     trailingIcon = {
-                                        IconButton(onClick = { expanded = true }) {
+                                        IconButton(onClick = { expandedPayment = true }) {
                                             Icon(
                                                 Icons.Default.ArrowDropDown,
                                                 contentDescription = "Dropdown",
@@ -306,10 +399,9 @@ fun BuySharesScreen(navController: NavController, propertyId: String) {
                                         cursorColor = HederaGreen
                                     )
                                 )
-
                                 DropdownMenu(
-                                    expanded = expanded,
-                                    onDismissRequest = { expanded = false },
+                                    expanded = expandedPayment,
+                                    onDismissRequest = { expandedPayment = false },
                                     modifier = Modifier
                                         .width(IntrinsicSize.Max)
                                         .background(Color.White)
@@ -325,7 +417,7 @@ fun BuySharesScreen(navController: NavController, propertyId: String) {
                                             },
                                             onClick = {
                                                 selectedPaymentMethod = method
-                                                expanded = false
+                                                expandedPayment = false
                                             }
                                         )
                                     }
@@ -381,7 +473,6 @@ fun BuySharesScreen(navController: NavController, propertyId: String) {
                                     )
                                     Log.d("BuyShares", "Hedera token transfer successful")
 
-                                    // Update user token balance
                                     val currentBalances = userDoc.get("tokenBalances") as? Map<String, Long> ?: emptyMap()
                                     val newBalance = (currentBalances[propertyId]?.toInt() ?: 0) + amount
                                     db.collection("users").document(userId)
@@ -389,7 +480,6 @@ fun BuySharesScreen(navController: NavController, propertyId: String) {
                                         .await()
                                     Log.d("BuyShares", "User token balance updated: $newBalance")
 
-                                    // Update property transaction history and totalTokens
                                     val currentTotalTokens = (property?.get("totalTokens") as? Number)?.toInt() ?: 0
                                     val newTotalTokens = currentTotalTokens - amount
                                     db.collection("properties").document(propertyId)
@@ -402,9 +492,7 @@ fun BuySharesScreen(navController: NavController, propertyId: String) {
                                         .await()
                                     Log.d("BuyShares", "Property updated: transaction history added, totalTokens now $newTotalTokens")
 
-                                    // Refresh property data
                                     fetchPropertyData()
-
                                     isPurchaseSuccessful = true
                                     showSuccess = true
                                     delay(2000)
@@ -429,9 +517,7 @@ fun BuySharesScreen(navController: NavController, propertyId: String) {
                             .height(56.dp),
                         enabled = !isLoading && shareCount.isNotEmpty() && (shareCount.toIntOrNull() ?: 0) > 0 && !isPurchaseSuccessful && property != null,
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = HederaGreen
-                        )
+                        colors = ButtonDefaults.buttonColors(containerColor = HederaGreen)
                     ) {
                         if (isLoading) {
                             CircularProgressIndicator(
@@ -482,9 +568,7 @@ fun BuySharesScreen(navController: NavController, propertyId: String) {
                                         .alpha(checkmarkAlpha)
                                 )
                             }
-
                             Spacer(modifier = Modifier.height(24.dp))
-
                             Text(
                                 text = "Purchase Successful!",
                                 fontFamily = BrickShareFonts.Halcyon,
@@ -492,9 +576,7 @@ fun BuySharesScreen(navController: NavController, propertyId: String) {
                                 fontWeight = FontWeight.Bold,
                                 color = BuildingBlocksWhite
                             )
-
                             Spacer(modifier = Modifier.height(8.dp))
-
                             Text(
                                 text = "You've purchased $shareCount shares",
                                 fontFamily = BrickShareFonts.Halcyon,
@@ -538,7 +620,6 @@ fun StepIndicator(currentStep: Int, primaryColor: Color) {
                     )
                 }
             }
-
             Box(
                 modifier = Modifier
                     .size(32.dp)

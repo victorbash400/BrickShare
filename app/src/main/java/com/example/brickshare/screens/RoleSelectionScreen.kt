@@ -1,12 +1,11 @@
 package com.example.brickshare.screens
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.MutableTransitionState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -20,9 +19,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,9 +40,9 @@ fun RoleSelectionScreen(navController: NavController, userViewModel: UserViewMod
     val buttonVisible = remember { MutableTransitionState(false).apply { targetState = true } }
 
     val colorScheme = darkColorScheme(
-        primary = Color(0xFF90CAF9),
+        primary = Color(0xFF90CAF9), // Light blue
         onPrimary = Color.Black,
-        secondary = Color(0xFF26A69A),
+        secondary = Color(0xFF26A69A), // Teal
         background = Color.Black,
         surface = Color(0xFF121212),
         onBackground = Color.White,
@@ -146,7 +145,7 @@ fun RoleSelectionScreen(navController: NavController, userViewModel: UserViewMod
                             icon = Icons.Rounded.AccountBalance
                         )
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(20.dp))
 
                         EnhancedRoleCard(
                             title = "Property Owner",
@@ -171,7 +170,6 @@ fun RoleSelectionScreen(navController: NavController, userViewModel: UserViewMod
                     ElevatedButton(
                         onClick = {
                             selectedRole?.let { role ->
-                                // Convert to lowercase to match EnhancedBottomNavigationBar
                                 userViewModel.setUserRole(role.name.lowercase())
                                 navController.navigate("dashboard")
                             }
@@ -216,34 +214,62 @@ fun EnhancedRoleCard(
     colorScheme: ColorScheme,
     icon: androidx.compose.ui.graphics.vector.ImageVector
 ) {
+    // Animation for edge lighting
+    val infiniteTransition = rememberInfiniteTransition(label = "edgeLighting")
+    val offset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "gradientOffset"
+    )
+
+    val gradientBrush = Brush.linearGradient(
+        colors = listOf(
+            Color(0xFF90CAF9), // Primary blue
+            Color(0xFF26A69A), // Secondary teal
+            Color(0xFF90CAF9)  // Back to blue
+        ),
+        start = Offset(0f, 0f),
+        end = Offset(1000f * offset, 1000f * offset)
+    )
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(120.dp)
+            .height(150.dp) // Increased height for better text fit
             .selectable(
                 selected = isSelected,
                 onClick = onSelect,
-                role = Role.RadioButton
+                role = androidx.compose.ui.semantics.Role.RadioButton
+            )
+            .then(
+                if (isSelected) Modifier.border(
+                    width = 2.dp,
+                    brush = gradientBrush,
+                    shape = RoundedCornerShape(16.dp)
+                ) else Modifier
             ),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) Color(0x2090CAF9) else Color(0xFF1E1E1E),
-            contentColor = if (isSelected) colorScheme.primary else Color.White
+            containerColor = if (isSelected) Color(0xFF1A2525) else Color(0xFF1E1E1E), // Darker teal-tint when selected
+            contentColor = Color.White
         ),
         elevation = CardDefaults.cardElevation(
-            defaultElevation = if (isSelected) 6.dp else 1.dp
-        ),
-        border = if (isSelected) BorderStroke(2.dp, colorScheme.primary) else BorderStroke(1.dp, Color(0xFF333333))
+            defaultElevation = if (isSelected) 8.dp else 2.dp
+        )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
+                .padding(20.dp), // Increased padding for larger card
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
-                    .size(52.dp)
+                    .size(60.dp) // Larger icon box
                     .clip(CircleShape)
                     .background(if (isSelected) Color(0x3090CAF9) else Color(0xFF262626)),
                 contentAlignment = Alignment.Center
@@ -251,37 +277,54 @@ fun EnhancedRoleCard(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    modifier = Modifier.size(28.dp),
+                    modifier = Modifier.size(32.dp), // Slightly larger icon
                     tint = if (isSelected) colorScheme.primary else Color(0xFFAAAAAA)
                 )
             }
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(20.dp))
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    fontSize = 18.sp,
+                    fontSize = 20.sp, // Slightly larger title
                     fontFamily = BrickShareFonts.Halcyon,
                     color = if (isSelected) colorScheme.primary else Color.White
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = description,
-                    fontSize = 14.sp,
+                    fontSize = 15.sp, // Slightly larger description
                     fontFamily = BrickShareFonts.Halcyon,
-                    color = if (isSelected) Color(0xFFD0D0D0) else Color(0xFF9E9E9E)
+                    color = if (isSelected) Color(0xFFD0D0D0) else Color(0xFF9E9E9E),
+                    maxLines = 3 // Allow wrapping if needed
                 )
             }
 
-            RadioButton(
-                selected = isSelected,
-                onClick = null,
-                colors = RadioButtonDefaults.colors(
-                    selectedColor = colorScheme.primary,
-                    unselectedColor = Color(0xFF606060)
-                )
-            )
+            // Custom polished selector
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (isSelected) colorScheme.primary else Color.Transparent
+                    )
+                    .border(
+                        width = 2.dp,
+                        color = if (isSelected) Color.White else Color(0xFF606060),
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isSelected) {
+                    Box(
+                        modifier = Modifier
+                            .size(12.dp)
+                            .clip(CircleShape)
+                            .background(Color.White)
+                    )
+                }
+            }
         }
     }
 }
