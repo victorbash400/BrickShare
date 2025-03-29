@@ -238,7 +238,7 @@ BrickShare follows a clean, modular architecture pattern:
 
 ## 💻 Demo
 
-Check out our interactive demo on [YouTube](https://youtu.be/demo-link) to see BrickShare in action!
+Check out our interactive demo on [YouTube]([https://youtu.be/demo-link](https://www.youtube.com/watch?v=dC7LpLUDaYg&ab_channel=VictorBash) to see BrickShare in action!
 
 ## 🛠️ Installation
 
