@@ -16,6 +16,14 @@
 
 </div>
 
+<div align="center">
+  <h2>⬇️ DOWNLOAD APK ⬇️</h2>
+  <a href="https://github.com/victorbash400/BrickShare/releases/download/BrickShare_0.1.0/BrickshareBeta.apk">
+    <img src="https://img.shields.io/badge/Download-BrickShare_Android_APK-brightgreen?style=for-the-badge&logo=android" alt="Download BrickShare Android APK" width="300px" />
+  </a>
+  <p><b>Android Only - Direct APK Download</b></p>
+</div>
+
 ## 📱 App Showcase
 
 <div align="center">
@@ -38,6 +46,12 @@
 ## 💎 The Vision
 
 BrickShare revolutionizes real estate investing by letting anyone invest in tokenized properties with as little as $10. Our platform bridges the gap between traditional real estate and modern digital assets, enabling fractional ownership through Hedera's secure, eco-friendly blockchain network.
+
+<div align="center">
+  <a href="https://github.com/victorbash400/BrickShare/releases/download/BrickShare_0.1.0/BrickshareBeta.apk">
+    <img src="https://img.shields.io/badge/Try_It_Now-Download_Android_APK-brightgreen?style=for-the-badge&logo=android" alt="Download BrickShare Android APK" width="300px" />
+  </a>
+</div>
 
 ## 🔮 How It Works
 
@@ -158,6 +172,12 @@ Our custom `EnhancedBottomNavigationBar` dynamically adjusts based on user role,
   </table>
 </div>
 
+<div align="center">
+  <a href="https://github.com/victorbash400/BrickShare/releases/download/BrickShare_0.1.0/BrickshareBeta.apk">
+    <img src="https://img.shields.io/badge/Ready_to_Try%3F-Download_Android_APK-brightgreen?style=for-the-badge&logo=android" alt="Download BrickShare Android APK" width="350px" />
+  </a>
+</div>
+
 ## 🔄 Hedera Integration
 
 BrickShare leverages Hedera's distributed ledger technology for:
@@ -234,6 +254,15 @@ cd BrickShare
 ./gradlew installDebug
 ```
 
+<div align="center">
+  <h3>⚡ Quick Installation ⚡</h3>
+  <p>Skip the build process and install directly:</p>
+  <a href="https://github.com/victorbash400/BrickShare/releases/download/BrickShare_0.1.0/BrickshareBeta.apk">
+    <img src="https://img.shields.io/badge/DOWNLOAD_APK-Android_Installation_File-brightgreen?style=for-the-badge&logo=android" alt="Download BrickShare Android APK" width="350px" />
+  </a>
+  <p><i>Simply download and open the APK file on your Android device</i></p>
+</div>
+
 ## 🚧 Roadmap
 
 <div align="center">
@@ -300,5 +329,11 @@ Distributed under the MIT License. See `LICENSE` for more information.
 **Built with 🍵 by Victor Bash for the Hedera Nairobi Hashaton**
 
 **Powered by Hedera Hashgraph & Jetpack Compose**
+
+<h2>⬇️ DOWNLOAD BRICKSHARE NOW ⬇️</h2>
+<a href="https://github.com/victorbash400/BrickShare/releases/download/BrickShare_0.1.0/BrickshareBeta.apk">
+  <img src="https://img.shields.io/badge/GET_STARTED-Download_Android_APK-brightgreen?style=for-the-badge&logo=android" alt="Download BrickShare Android APK" width="350px" />
+</a>
+<p><b>Android Only - Direct APK Download</b></p>
 
 </div>
