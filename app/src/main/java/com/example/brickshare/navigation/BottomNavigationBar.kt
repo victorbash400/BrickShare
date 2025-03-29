@@ -6,6 +6,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,12 +22,8 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.brickshare.ui.theme.BrickShareFonts
+import com.example.brickshare.ui.theme.HederaGreen
 import com.example.brickshare.viewmodel.UserViewModel
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.rounded.AccountCircle
-import androidx.compose.material.icons.rounded.AddCircle
-import androidx.compose.material.icons.rounded.AddCircleOutline
 
 data class BottomNavItem(
     val route: String,
@@ -40,23 +38,23 @@ fun EnhancedBottomNavigationBar(
     userViewModel: UserViewModel,
     backgroundColor: Color = Color(0xFF000000), // Pure black background
     selectedItemColor: Color = Color.White, // White for selected icons
-    unselectedItemColor: Color = Color.White // White for unselected icons
+    unselectedItemColor: Color = Color.White.copy(alpha = 0.7f) // Slightly dimmed white for unselected
 ) {
     val userRole by userViewModel.userRole.collectAsState()
 
     val items = when (userRole) {
         "investor" -> listOf(
-            BottomNavItem("dashboard", Icons.Filled.Home, Icons.Filled.Home), // Home button
-            BottomNavItem("browse", Icons.Filled.Search, Icons.Filled.Search),
-            BottomNavItem("portfolio", Icons.Filled.AccountBalanceWallet, Icons.Filled.AccountBalanceWallet, badgeCount = 3),
-            BottomNavItem("income", Icons.Filled.AttachMoney, Icons.Filled.AttachMoney),
-            BottomNavItem("profile", Icons.Rounded.AccountCircle, Icons.Rounded.AccountCircle)
+            BottomNavItem("dashboard", Icons.Rounded.Home, Icons.Rounded.Home),
+            BottomNavItem("browse", Icons.Rounded.Explore, Icons.Rounded.Explore),
+            BottomNavItem("portfolio", Icons.Rounded.PieChart, Icons.Rounded.PieChart),
+            BottomNavItem("income", Icons.Rounded.TrendingUp, Icons.Rounded.TrendingUp),
+            BottomNavItem("profile", Icons.Rounded.Person, Icons.Rounded.Person)
         )
         "property_owner" -> listOf(
-            BottomNavItem("dashboard", Icons.Filled.Home, Icons.Filled.Home), // Home button
-            BottomNavItem("add_property", Icons.Rounded.AddCircleOutline, Icons.Rounded.AddCircle),
-            BottomNavItem("manage_property", Icons.Filled.Settings, Icons.Filled.Settings),
-            BottomNavItem("profile", Icons.Rounded.AccountCircle, Icons.Rounded.AccountCircle)
+            BottomNavItem("dashboard", Icons.Rounded.Home, Icons.Rounded.Home),
+            BottomNavItem("add_property", Icons.Rounded.AddHome, Icons.Rounded.AddHome),
+            BottomNavItem("manage_property", Icons.Rounded.Apartment, Icons.Rounded.Apartment),
+            BottomNavItem("profile", Icons.Rounded.Person, Icons.Rounded.Person)
         )
         else -> emptyList()
     }
@@ -64,19 +62,17 @@ fun EnhancedBottomNavigationBar(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route?.split("/")?.get(0) // Match base route
 
-    Surface(
-        color = backgroundColor,
-        // Removed shape parameter to eliminate rounded corners
-        tonalElevation = 0.dp, // No elevation for seamless integration
-        shadowElevation = 0.dp, // No shadow either
+    NavigationBar(
+        containerColor = backgroundColor,
+        tonalElevation = 0.dp, // Flat look
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .height(64.dp) // Slightly taller for modern feel
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -84,7 +80,7 @@ fun EnhancedBottomNavigationBar(
                 val selected = currentRoute == item.route
 
                 val scale by animateFloatAsState(
-                    targetValue = if (selected) 1.15f else 1f,
+                    targetValue = if (selected) 1.2f else 1f,
                     animationSpec = spring(
                         dampingRatio = Spring.DampingRatioLowBouncy,
                         stiffness = Spring.StiffnessMediumLow
@@ -92,65 +88,68 @@ fun EnhancedBottomNavigationBar(
                     label = "scale"
                 )
 
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    IconButton(
-                        onClick = {
-                            if (currentRoute != item.route) {
-                                navController.navigate(item.route) {
-                                    launchSingleTop = true
-                                    restoreState = true
-                                    popUpTo(navController.graph.startDestinationId) {
-                                        saveState = true
+                NavigationBarItem(
+                    selected = selected,
+                    onClick = {
+                        if (currentRoute != item.route) {
+                            navController.navigate(item.route) {
+                                launchSingleTop = true
+                                restoreState = true
+                                popUpTo(navController.graph.startDestinationId) {
+                                    saveState = true
+                                }
+                            }
+                        }
+                    },
+                    icon = {
+                        Column(
+                            modifier = Modifier.scale(scale),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = if (selected) item.selectedIcon else item.icon,
+                                    contentDescription = item.route,
+                                    tint = if (selected) selectedItemColor else unselectedItemColor,
+                                    modifier = Modifier.size(28.dp) // Larger icons for modern look
+                                )
+                                if (item.badgeCount > 0) {
+                                    Badge(
+                                        modifier = Modifier
+                                            .offset(x = 10.dp, y = (-10).dp)
+                                            .size(18.dp),
+                                        containerColor = Color(0xFFE57373),
+                                        contentColor = Color.White
+                                    ) {
+                                        Text(
+                                            text = item.badgeCount.toString(),
+                                            fontSize = 10.sp,
+                                            fontFamily = BrickShareFonts.Halcyon,
+                                            textAlign = TextAlign.Center
+                                        )
                                     }
                                 }
                             }
-                        },
-                        modifier = Modifier
-                            .scale(scale)
-                            .size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (selected) item.selectedIcon else item.icon,
-                            contentDescription = item.route,
-                            tint = if (selected) selectedItemColor else unselectedItemColor,
-                            modifier = Modifier.size(24.dp)
-                        )
-
-                        if (item.badgeCount > 0) {
-                            Badge(
-                                modifier = Modifier
-                                    .offset(x = 8.dp, y = (-8).dp)
-                                    .size(16.dp)
-                                    .align(Alignment.TopEnd),
-                                containerColor = Color(0xFFE57373), // Soft red badge
-                                contentColor = Color.White
-                            ) {
-                                Text(
-                                    text = item.badgeCount.toString(),
-                                    fontSize = 9.sp,
-                                    fontFamily = BrickShareFonts.Halcyon,
-                                    textAlign = TextAlign.Center
+                            if (selected) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(HederaGreen) // Green dot under selected icon
+                                        .padding(top = 2.dp) // Small spacing from icon
                                 )
                             }
                         }
-                    }
-
-                    if (selected) {
-                        Box(
-                            modifier = Modifier
-                                .size(5.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFE57373)) // Red dot for selected
-                                .align(Alignment.BottomCenter)
-                                .offset(y = (-2).dp)
-                        )
-                    }
-                }
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = selectedItemColor,
+                        unselectedIconColor = unselectedItemColor,
+                        indicatorColor = Color.Transparent // Remove default indicator
+                    )
+                )
             }
         }
     }
