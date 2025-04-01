@@ -1,4 +1,4 @@
-# 🏢 BrickShare
+# 🏢 BrickShare Tangerine 🍊
 
 <div align="center">
   
@@ -11,8 +11,13 @@
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-Latest-purple.svg)](https://developer.android.com/jetpack/compose)
 [![Firebase](https://img.shields.io/badge/Firebase-Integrated-orange.svg)](https://firebase.google.com/)
 [![Hedera](https://img.shields.io/badge/Hedera-Hashgraph-00A4BE.svg)](https://hedera.com/)
-[![Status](https://img.shields.io/badge/Status-Active-success.svg)]()
+[![Status](https://img.shields.io/badge/Status-Beta-FF8C00.svg)]()
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+<h3>📱 Get BrickShare Tangerine</h3>
+<a href="https://github.com/victorbash400/BrickShare/releases/download/Brickshare_Tangerine/Brickshare.Tangerine.apk">
+  <img src="https://img.shields.io/badge/DOWNLOAD-Tangerine_Beta-FF8C00?style=for-the-badge&logo=android" alt="Download BrickShare Tangerine APK" width="300px" />
+</a>
 
 </div>
 
@@ -35,6 +40,29 @@
   </table>
 </div>
 
+## ✨ What's New in Tangerine
+
+<div align="center">
+  <table>
+    <tr>
+      <td align="center">📊</td>
+      <td><b>Enhanced Data Engine</b> - Complete portfolio analytics with performance metrics and investment history</td>
+    </tr>
+    <tr>
+      <td align="center">⚡</td>
+      <td><b>Live Updates</b> - Real-time notifications for wallet changes and new investment opportunities</td>
+    </tr>
+    <tr>
+      <td align="center">📱</td>
+      <td><b>Dynamic Dashboard</b> - Interactive visualization of your real estate portfolio with customizable views</td>
+    </tr>
+    <tr>
+      <td align="center">🔄</td>
+      <td><b>Streamlined Transactions</b> - Optimized user experience for faster property acquisition and trading</td>
+    </tr>
+  </table>
+</div>
+
 ## 💎 The Vision
 
 BrickShare revolutionizes real estate investing by letting anyone invest in tokenized properties with as little as $10. Our platform bridges the gap between traditional real estate and modern digital assets, enabling fractional ownership through Hedera's secure, eco-friendly blockchain network.
@@ -53,6 +81,15 @@ BrickShare revolutionizes real estate investing by letting anyone invest in toke
 4. **Track & Grow** - Monitor your portfolio or property performance in real-time
 
 All transactions are securely recorded on the Hedera Hashgraph distributed ledger, ensuring transparency and immutability.
+
+## 🛠️ Technical Improvements
+
+```
+⚙️ Hedera consensus service integration for real-time transaction validation
+💰 Enhanced smart contract architecture for more efficient rent distribution
+🏷️ Improved token metadata for better property representation
+📱 Responsive design optimization for Android devices
+```
 
 ## 🔥 Key Features
 
@@ -95,29 +132,6 @@ All transactions are securely recorded on the Hedera Hashgraph distributed ledge
   </table>
 </div>
 
-## ✨ The Experience
-
-BrickShare delivers an immersive, intuitive experience through role-based navigation. The app automatically adapts to whether you're an investor or property owner:
-
-<div align="center">
-  <table>
-    <tr>
-      <th>Investor Flow</th>
-      <th>Property Owner Flow</th>
-    </tr>
-    <tr>
-      <td align="center">
-        Dashboard → Browse → Portfolio → Income → Profile
-      </td>
-      <td align="center">
-        Dashboard → Add Property → Manage Property → Profile
-      </td>
-    </tr>
-  </table>
-</div>
-
-Our custom `EnhancedBottomNavigationBar` dynamically adjusts based on user role, ensuring a tailored experience for everyone.
-
 ## 🚀 Tech Stack
 
 <div align="center">
@@ -127,7 +141,6 @@ Our custom `EnhancedBottomNavigationBar` dynamically adjusts based on user role,
 | <img src="https://raw.githubusercontent.com/JetBrains/compose-multiplatform/master/artwork/idea-logo.svg" height="50" /><br>Jetpack Compose | <img src="https://firebase.google.com/downloads/brand-guidelines/PNG/logo-logomark.png" height="50" /><br>Firebase Firestore | <img src="https://cryptologos.cc/logos/hedera-hbar-logo.png" height="50" /><br>Hedera Hashgraph | <img src="https://firebase.google.com/downloads/brand-guidelines/PNG/logo-logomark.png" height="50" /><br>Firebase Auth |
 | Kotlin | Cloud Functions | Smart Contracts | Google Sign-In |
 | Material 3 | Firestore Rules | Hedera Token Service | Secure Storage |
-| Compose Navigation | Admin SDK | Hedera Consensus Service | JWT |
 
 </div>
 
@@ -158,82 +171,6 @@ Our custom `EnhancedBottomNavigationBar` dynamically adjusts based on user role,
   </table>
 </div>
 
-## 🔄 Hedera Integration
-
-BrickShare leverages Hedera's distributed ledger technology for:
-
-```kotlin
-// Sample code from HederaClient.kt
-fun createHederaAccount(): Pair<String, String> {
-    val privateKey = PrivateKey.generateED25519()
-    val publicKey = privateKey.publicKey
-    
-    // Create new account with initial 5 HBAR
-    val response = AccountCreateTransaction()
-        .setKey(publicKey)
-        .setInitialBalance(Hbar(5))
-        .execute(client)
-        .getReceipt(client)
-        
-    val accountId = response.accountId.toString()
-    return Pair(accountId, privateKey.toString())
-}
-```
-
-Our seamless Hedera integration provides:
-
-1. **Secure User Accounts** - Each user gets a personal Hedera account
-2. **Property Tokenization** - Real estate assets are represented as fungible tokens
-3. **Transparent Transactions** - All investments are recorded on the immutable ledger
-4. **Automated Income Distribution** - Smart contracts handle payment distributions
-
-## 📊 Architecture
-
-BrickShare follows a clean, modular architecture pattern:
-
-<div align="center">
-  <pre>
-📦 BrickShare
- ┣ 📂 ui
- ┃ ┣ 📂 screens
- ┃ ┃ ┣ 📜 DashboardScreen.kt
- ┃ ┃ ┣ 📜 PortfolioScreen.kt
- ┃ ┃ ┣ 📜 BrowseScreen.kt
- ┃ ┃ ┗ 📜 ProfileScreen.kt
- ┃ ┣ 📂 components
- ┃ ┃ ┣ 📜 EnhancedBottomNavigationBar.kt
- ┃ ┃ ┗ 📜 PropertyCard.kt
- ┃ ┗ 📂 theme
- ┃   ┗ 📜 BrickShareTheme.kt
- ┣ 📂 viewmodel
- ┃ ┗ 📜 UserViewModel.kt
- ┣ 📂 navigation
- ┃ ┗ 📜 Navigation.kt
- ┣ 📂 blockchain
- ┃ ┣ 📜 HederaClient.kt
- ┃ ┗ 📜 HederaUtils.kt
- ┗ 📜 MainActivity.kt
-  </pre>
-</div>
-
-## 💻 Demo
-
-Check out our interactive demo on [YouTube](https://youtu.be/demo-link) to see BrickShare in action!
-
-## 🛠️ Installation
-
-```bash
-# Clone this repository
-git clone https://github.com/victorbash400/BrickShare.git
-
-# Navigate to the project directory
-cd BrickShare
-
-# Open with Android Studio
-# or use the command line:
-./gradlew installDebug
-```
-
 ## 🚧 Roadmap
 
 <div align="center">
@@ -257,15 +194,19 @@ cd BrickShare
   </table>
 </div>
 
-## 👥 Contributing
+## 💻 Demo
 
-Contributions are what make the open-source community thrive! Please feel free to contribute:
+Check out our interactive demo on [YouTube](https://www.youtube.com/watch?v=dC7LpLUDaYg&ab_channel=VictorBash) to see BrickShare in action!
 
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+## 🛠️ Installation
+
+Simply download and install the APK on your Android device:
+
+<div align="center">
+  <a href="https://github.com/victorbash400/BrickShare/releases/download/Brickshare_Tangerine/Brickshare.Tangerine.apk">
+    <img src="https://img.shields.io/badge/DOWNLOAD-Tangerine_Beta-FF8C00?style=for-the-badge&logo=android" alt="Download BrickShare Tangerine APK" width="300px" />
+  </a>
+</div>
 
 ## 📬 Contact
 
@@ -297,7 +238,7 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 <div align="center">
   
-**Built with 🍵 by Victor Bash for the Hedera Nairobi Hashaton**
+**Built with 🍊 by Victor Bash for the Hedera Nairobi Hashaton**
 
 **Powered by Hedera Hashgraph & Jetpack Compose**
 
