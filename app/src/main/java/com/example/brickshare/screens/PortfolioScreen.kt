@@ -24,6 +24,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.example.brickshare.HederaUtils
 import com.example.brickshare.ui.theme.BrickShareFonts
 import com.example.brickshare.ui.theme.HederaGreen
 import com.example.brickshare.ui.theme.DeepNavy
@@ -41,18 +42,30 @@ fun PortfolioScreen(navController: NavController) {
     val userId = FirebaseAuth.getInstance().currentUser?.uid
     var tokenBalances by remember { mutableStateOf<Map<String, Long>>(emptyMap()) }
     var properties by remember { mutableStateOf<Map<String, Map<String, Any>>>(emptyMap()) }
+    var isLoading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
     var sortOption by remember { mutableStateOf("Value: High to Low") }
 
     LaunchedEffect(userId, sortOption) {
         if (userId != null) {
             coroutineScope.launch {
-                val userDoc = db.collection("users").document(userId).get().await()
-                tokenBalances = userDoc.get("tokenBalances") as? Map<String, Long> ?: emptyMap()
+                isLoading = true
+                try {
+                    val userDoc = db.collection("users").document(userId).get().await()
+                    val hederaAccountId = userDoc.getString("hederaAccountId") ?: return@launch
+                    tokenBalances = HederaUtils.fetchTokenBalances(hederaAccountId)
+                    HederaUtils.syncTokenBalances(userId, hederaAccountId)
 
-                val propertiesSnapshot = db.collection("properties").get().await()
-                properties = propertiesSnapshot.documents.associate { doc ->
-                    doc.id to doc.data!!
+                    val propertiesSnapshot = db.collection("properties").get().await()
+                    properties = propertiesSnapshot.documents.associate { doc ->
+                        doc.id to doc.data!!
+                    }
+                    errorMessage = null
+                } catch (e: Exception) {
+                    errorMessage = "Error loading portfolio: ${e.message}"
+                } finally {
+                    isLoading = false
                 }
             }
         }
@@ -82,9 +95,33 @@ fun PortfolioScreen(navController: NavController) {
                             color = DeepNavy
                         )
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = BuildingBlocksWhite
-                    ),
+                    actions = {
+                        IconButton(onClick = {
+                            if (userId != null) {
+                                coroutineScope.launch {
+                                    isLoading = true
+                                    try {
+                                        val hederaAccountId = db.collection("users").document(userId).get().await()
+                                            .getString("hederaAccountId") ?: return@launch
+                                        tokenBalances = HederaUtils.fetchTokenBalances(hederaAccountId)
+                                        HederaUtils.syncTokenBalances(userId, hederaAccountId)
+                                        errorMessage = null
+                                    } catch (e: Exception) {
+                                        errorMessage = "Error refreshing: ${e.message}"
+                                    } finally {
+                                        isLoading = false
+                                    }
+                                }
+                            }
+                        }) {
+                            Icon(
+                                Icons.Rounded.Refresh,
+                                contentDescription = "Refresh",
+                                tint = HederaGreen
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = BuildingBlocksWhite),
                     modifier = Modifier.shadow(4.dp)
                 )
             }
@@ -100,12 +137,24 @@ fun PortfolioScreen(navController: NavController) {
                         )
                     )
             ) {
-                PortfolioSummaryCard(tokenBalances, properties)
-                Spacer(modifier = Modifier.height(24.dp))
-                InvestmentsSection(tokenBalances, properties, navController, sortOption) { sortOption = it }
-                Spacer(modifier = Modifier.height(24.dp))
-                IncomeCard(navController)
-                Spacer(modifier = Modifier.height(20.dp))
+                if (isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 50.dp))
+                } else if (errorMessage != null) {
+                    Text(
+                        text = errorMessage!!,
+                        fontFamily = BrickShareFonts.Halcyon,
+                        fontSize = 16.sp,
+                        color = Color.Red,
+                        modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 50.dp)
+                    )
+                } else {
+                    PortfolioSummaryCard(tokenBalances, properties)
+                    Spacer(modifier = Modifier.height(24.dp))
+                    InvestmentsSection(tokenBalances, properties, navController, sortOption) { sortOption = it }
+                    Spacer(modifier = Modifier.height(24.dp))
+                    IncomeCard(tokenBalances, properties, navController)
+                    Spacer(modifier = Modifier.height(20.dp))
+                }
             }
         }
     }
@@ -122,14 +171,17 @@ private fun PortfolioSummaryCard(tokenBalances: Map<String, Long>, properties: M
         val pricePerToken = (properties[propertyId]?.get("pricePerToken") as? Number)?.toDouble() ?: 0.0
         shares * pricePerToken
     }
+    val totalIncome = tokenBalances.entries.sumOf { (propertyId, _) ->
+        (properties[propertyId]?.get("totalHbarCollected") as? Number)?.toDouble() ?: 0.0
+    } * 0.05
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(200.dp)
-            .scale(scale),
+            .height(220.dp)
+            .scale(scale)
+            .shadow(6.dp, RoundedCornerShape(20.dp)),
         shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White, contentColor = DeepNavy)
     ) {
         Column(
@@ -144,7 +196,7 @@ private fun PortfolioSummaryCard(tokenBalances: Map<String, Long>, properties: M
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Total Value",
+                    "Portfolio Value",
                     fontFamily = BrickShareFonts.Halcyon,
                     fontSize = 20.sp,
                     color = DeepNavy.copy(alpha = 0.7f)
@@ -160,7 +212,7 @@ private fun PortfolioSummaryCard(tokenBalances: Map<String, Long>, properties: M
                         modifier = Modifier.size(20.dp)
                     )
                     Text(
-                        "7.2%", // Placeholder; calculate dynamically if data available
+                        "+${String.format("%.1f", totalIncome / totalValue * 100)}%",
                         fontFamily = BrickShareFonts.Halcyon,
                         fontSize = 16.sp,
                         color = HederaGreen
@@ -169,7 +221,7 @@ private fun PortfolioSummaryCard(tokenBalances: Map<String, Long>, properties: M
             }
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                "$${String.format("%.2f", totalValue)}",
+                "${String.format("%.2f", totalValue)} HBAR",
                 style = TextStyle(
                     fontFamily = BrickShareFonts.Halcyon,
                     fontSize = 36.sp,
@@ -187,7 +239,7 @@ private fun PortfolioSummaryCard(tokenBalances: Map<String, Long>, properties: M
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    "[Value Trend Chart]",
+                    "[Value Trend Chart Placeholder]",
                     fontFamily = BrickShareFonts.Halcyon,
                     fontSize = 14.sp,
                     color = HederaGreen,
@@ -241,29 +293,34 @@ private fun InvestmentsSection(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .padding(16.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(HederaGreen.copy(alpha = 0.1f)),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    "No investments yet",
+                    "No investments yet. Start exploring properties!",
                     fontFamily = BrickShareFonts.Halcyon,
                     fontSize = 18.sp,
-                    color = DeepNavy.copy(alpha = 0.7f)
+                    color = DeepNavy.copy(alpha = 0.7f),
+                    textAlign = TextAlign.Center
                 )
             }
         } else {
             LazyColumn(
-                modifier = Modifier
-                    .heightIn(max = 400.dp), // Limit height to avoid infinite constraints
+                modifier = Modifier.heightIn(max = 400.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 items(sortedInvestments) { (propertyId, shares) ->
                     val propertyData = properties[propertyId]
                     if (propertyData != null) {
-                        val name = propertyData["metadata.address"] as? String ?: "Unknown Property"
+                        // Safely access nested metadata map
+                        val metadata = propertyData["metadata"] as? Map<*, *>
+                        val name = metadata?.get("address") as? String ?: "Unknown Property"
                         val pricePerToken = (propertyData["pricePerToken"] as? Number)?.toDouble() ?: 0.0
                         val value = shares * pricePerToken
-                        val roi = 5.0 // Placeholder; fetch real ROI if available
+                        val totalHbarCollected = (propertyData["totalHbarCollected"] as? Number)?.toDouble() ?: 0.0
+                        val roi = if (value > 0) (totalHbarCollected / value) * 100 else 0.0
 
                         PropertyCard(
                             name = name,
@@ -324,6 +381,7 @@ private fun SortDropdown(sortOption: String, onSortChange: (String) -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PropertyCard(
     name: String,
@@ -341,9 +399,9 @@ private fun PropertyCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .scale(scale),
+            .scale(scale)
+            .shadow(4.dp, RoundedCornerShape(16.dp)),
         shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White, contentColor = DeepNavy)
     ) {
         Row(
@@ -365,7 +423,7 @@ private fun PropertyCard(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
@@ -375,14 +433,14 @@ private fun PropertyCard(
                         color = DeepNavy.copy(alpha = 0.7f)
                     )
                     Text(
-                        "$${String.format("%.2f", value)}",
+                        "${String.format("%.2f", value)} HBAR",
                         fontFamily = BrickShareFonts.Halcyon,
                         fontSize = 14.sp,
                         color = HederaGreen,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        "$roi% ROI",
+                        "${String.format("%.1f", roi)}% ROI",
                         fontFamily = BrickShareFonts.Halcyon,
                         fontSize = 14.sp,
                         color = DeepNavy.copy(alpha = 0.7f)
@@ -431,7 +489,17 @@ private fun PropertyCard(
 }
 
 @Composable
-private fun IncomeCard(navController: NavController) {
+private fun IncomeCard(
+    tokenBalances: Map<String, Long>,
+    properties: Map<String, Map<String, Any>>,
+    navController: NavController
+) {
+    val monthlyIncome = tokenBalances.entries.sumOf { (propertyId, shares) ->
+        val totalHbarCollected = (properties[propertyId]?.get("totalHbarCollected") as? Number)?.toDouble() ?: 0.0
+        val totalSupply = (properties[propertyId]?.get("totalTokens") as? Number)?.toLong() ?: 1L
+        (totalHbarCollected / totalSupply) * shares * 0.0833
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -454,7 +522,7 @@ private fun IncomeCard(navController: NavController) {
                     color = DeepNavy.copy(alpha = 0.7f)
                 )
                 Text(
-                    "$175", // Placeholder; calculate dynamically if data available
+                    "${String.format("%.2f", monthlyIncome)} HBAR",
                     fontFamily = BrickShareFonts.Halcyon,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,

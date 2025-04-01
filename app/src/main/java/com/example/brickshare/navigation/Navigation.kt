@@ -1,10 +1,13 @@
 package com.example.brickshare.navigation
 
+import AdaptiveBottomNavigationBar
 import androidx.activity.result.ActivityResultLauncher
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -15,7 +18,18 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.example.brickshare.screens.*
+import com.example.brickshare.screens.AddPropertyScreen
+import com.example.brickshare.screens.BrowseScreen
+import com.example.brickshare.screens.BuySharesScreen
+import com.example.brickshare.screens.DashboardScreen
+import com.example.brickshare.screens.IncomeScreen
+import com.example.brickshare.screens.ManagePropertyScreen
+import com.example.brickshare.screens.ManageSinglePropertyScreen
+import com.example.brickshare.screens.PortfolioScreen
+import com.example.brickshare.screens.ProfileScreen
+import com.example.brickshare.screens.PropertyDetailScreen
+import com.example.brickshare.screens.RoleSelectionScreen
+import com.example.brickshare.screens.WelcomeScreen
 import com.example.brickshare.viewmodel.UserViewModel
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
 
@@ -29,8 +43,9 @@ fun Navigation(
     val userRole by userViewModel.userRole.collectAsState()
     val userId by userViewModel.userId.collectAsState()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route
+    val currentRoute = navBackStackEntry?.destination?.route?.split("/")?.firstOrNull()
 
+    // Routes where bottom navigation should be visible
     val mainAppRoutes = listOf(
         "dashboard",
         "browse",
@@ -40,24 +55,27 @@ fun Navigation(
         "add_property",
         "manage_property"
     )
-    val isBottomBarVisible = userRole != null && (
-            currentRoute in mainAppRoutes ||
-                    currentRoute?.startsWith("manage_property/") == true
-            )
+
+    val isBottomBarVisible = userRole != null && currentRoute in mainAppRoutes
 
     val startDestination = "welcome"
 
+    // Use WindowInsets-aware Scaffold
     Scaffold(
+        // Configure Scaffold to respect system window insets
+        contentWindowInsets = WindowInsets.systemBars,
         bottomBar = {
             AnimatedVisibility(
                 visible = isBottomBarVisible,
                 enter = expandVertically(),
                 exit = shrinkVertically()
             ) {
-                EnhancedBottomNavigationBar(navController, userViewModel)
+                // Use the new AdaptiveBottomNavigationBar instead
+                AdaptiveBottomNavigationBar(navController, userViewModel)
             }
         }
     ) { innerPadding ->
+        // Apply padding from Scaffold
         NavHost(
             navController = navController,
             startDestination = startDestination,
@@ -86,7 +104,7 @@ fun Navigation(
             }
             composable("property_detail/{propertyId}") { backStackEntry ->
                 val propertyId = backStackEntry.arguments?.getString("propertyId") ?: ""
-                PropertyDetailScreen(navController, propertyId, userViewModel) // Added userViewModel
+                PropertyDetailScreen(navController, propertyId, userViewModel)
             }
             composable("add_property") {
                 AddPropertyScreen(navController)
@@ -114,6 +132,9 @@ fun Navigation(
     }
 }
 
+/**
+ * Extension function for navigating to the main app flow and clearing the back stack
+ */
 fun NavHostController.navigateToMainApp() {
     navigate("dashboard") {
         popUpTo("welcome") { inclusive = true }

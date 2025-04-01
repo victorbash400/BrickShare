@@ -58,6 +58,15 @@ object HederaUtils {
             val receipt = txResponse.getReceipt(client)
             val tokenId = receipt.tokenId?.toString() ?: throw Exception("Failed to create token")
 
+            // Store token metadata in Firestore
+            db.collection("tokens").document(tokenId).set(
+                mapOf(
+                    "name" to "REAL_ESTATE_$propertyId",
+                    "symbol" to propertyId.take(4),
+                    "totalSupply" to totalTokens
+                )
+            ).await()
+
             Log.d("HederaUtils", "Property token created: $tokenId")
             return tokenId
         } catch (e: Exception) {
@@ -154,10 +163,21 @@ object HederaUtils {
 
             // Update buyer’s balance and property’s collected HBAR
             updateHbarBalance(buyerUserId, Hbar.fromTinybars((-totalHbarCostInHbar * 100_000_000).toLong()))
-            val propertyId = "mhLsMjBmrOltqGW7dAE2" // Hardcoded for now, replace with dynamic logic later
+            val propertyId = "mhLsMjBmrOltqGW7dAE2" // Replace with dynamic logic later
             db.collection("properties").document(propertyId)
-                .update("totalHbarCollected", FieldValue.increment(totalHbarCostInHbar))
-                .await()
+                .update(
+                    mapOf(
+                        "totalHbarCollected" to FieldValue.increment(totalHbarCostInHbar),
+                        "tokensSold" to FieldValue.increment(amount.toLong())
+                    )
+                ).await()
+
+            // Update buyer's token balance
+            db.collection("users").document(buyerUserId)
+                .update("tokenBalances.$tokenId", FieldValue.increment(amount.toLong())).await()
+
+            // Record transaction
+            recordTransaction(buyerUserId, "Purchased $amount tokens of $tokenId for $totalHbarCostInHbar HBAR")
 
             Log.d("HederaUtils", "Purchase completed: $amount tokens of $tokenId to $buyerAccountId for $totalHbarCostInHbar HBAR. Transaction ID: ${receipt.transactionId}")
         } catch (e: Exception) {
@@ -191,6 +211,9 @@ object HederaUtils {
 
             updateHbarBalance(ownerId, hbarToTransfer)
             db.collection("properties").document(propertyId).update("totalHbarCollected", 0.0).await()
+
+            // Record transaction
+            recordTransaction(ownerId, "Received $totalHbarCollected HBAR from property $propertyId")
 
             Log.d("HederaUtils", "Transferred $totalHbarCollected HBAR to owner $ownerId for property $propertyId")
         } catch (e: Exception) {
@@ -246,11 +269,117 @@ object HederaUtils {
                     .firstOrNull()?.id ?: return@forEach
                 val hbarAmount = Hbar.fromTinybars((totalHbarToDistribute.toTinybars() * shares) / totalShares)
                 updateHbarBalance(investorUserId, hbarAmount)
+                recordTransaction(investorUserId, "Received $hbarAmount HBAR from property $propertyId distribution")
             }
+
+            recordTransaction(ownerUserId, "Distributed $totalHbarToDistribute HBAR for property $propertyId")
 
             Log.d("HederaUtils", "HBAR distribution completed for property $propertyId. Transaction ID: ${receipt.transactionId}")
         } catch (e: Exception) {
             Log.e("HederaUtils", "Failed to distribute HBAR for property $propertyId: ${e.message}", e)
+            throw e
+        }
+    }
+
+    // Fetch live HBAR balance from Hedera
+    suspend fun fetchHbarBalance(accountId: String): Hbar {
+        try {
+            val client = HederaClient.client
+            val balance = AccountBalanceQuery()
+                .setAccountId(AccountId.fromString(accountId))
+                .execute(client)
+            Log.d("HederaUtils", "Fetched HBAR balance for $accountId: ${balance.hbars}")
+            return balance.hbars
+        } catch (e: Exception) {
+            Log.e("HederaUtils", "Failed to fetch HBAR balance for $accountId: ${e.message}", e)
+            throw e
+        }
+    }
+
+    // Fetch token balances for an account from Hedera
+    suspend fun fetchTokenBalances(accountId: String): Map<String, Long> {
+        try {
+            val client = HederaClient.client
+            val accountInfo = AccountInfoQuery()
+                .setAccountId(AccountId.fromString(accountId))
+                .execute(client)
+            val tokenBalances = accountInfo.tokenRelationships.mapValues { it.value.balance }
+            Log.d("HederaUtils", "Fetched token balances for $accountId: $tokenBalances")
+            return tokenBalances.mapKeys { it.key.toString() }
+        } catch (e: Exception) {
+            Log.e("HederaUtils", "Failed to fetch token balances for $accountId: ${e.message}", e)
+            throw e
+        }
+    }
+
+    // Sync token balances with Firestore
+    suspend fun syncTokenBalances(userId: String, accountId: String) {
+        try {
+            val tokenBalances = fetchTokenBalances(accountId)
+            db.collection("users").document(userId)
+                .update("tokenBalances", tokenBalances)
+                .await()
+            Log.d("HederaUtils", "Synced token balances for user $userId: $tokenBalances")
+        } catch (e: Exception) {
+            Log.e("HederaUtils", "Failed to sync token balances for $userId: ${e.message}", e)
+            throw e
+        }
+    }
+
+    // Record a transaction in Firestore
+    suspend fun recordTransaction(userId: String, description: String) {
+        try {
+            val transactionData = mapOf(
+                "description" to description,
+                "timestamp" to System.currentTimeMillis()
+            )
+            db.collection("users").document(userId)
+                .collection("transactions")
+                .add(transactionData)
+                .await()
+            Log.d("HederaUtils", "Recorded transaction for user $userId: $description")
+        } catch (e: Exception) {
+            Log.e("HederaUtils", "Failed to record transaction for $userId: ${e.message}", e)
+            throw e
+        }
+    }
+
+    // Fetch property token info from Hedera
+    suspend fun fetchPropertyTokenInfo(tokenId: String): Pair<Long, Long> { // Returns (totalSupply, tokensInCirculation)
+        try {
+            val client = HederaClient.client
+            val tokenInfo = TokenInfoQuery()
+                .setTokenId(TokenId.fromString(tokenId))
+                .execute(client)
+            val totalSupply = tokenInfo.totalSupply
+            val tokensInCirculation = totalSupply - (tokenInfo.treasuryAccountId?.let {
+                AccountBalanceQuery()
+                    .setAccountId(it)
+                    .execute(client)
+                    .tokens?.get(TokenId.fromString(tokenId)) ?: 0L
+            } ?: 0L)
+            Log.d("HederaUtils", "Fetched token info for $tokenId: totalSupply=$totalSupply, tokensInCirculation=$tokensInCirculation")
+            return Pair(totalSupply, tokensInCirculation)
+        } catch (e: Exception) {
+            Log.e("HederaUtils", "Failed to fetch token info for $tokenId: ${e.message}", e)
+            throw e
+        }
+    }
+
+    // Sync property token info with Firestore
+    suspend fun syncPropertyTokenInfo(propertyId: String, tokenId: String) {
+        try {
+            val (totalSupply, tokensSold) = fetchPropertyTokenInfo(tokenId)
+            db.collection("properties").document(propertyId)
+                .update(
+                    mapOf(
+                        "totalTokens" to totalSupply,
+                        "tokensSold" to tokensSold
+                    )
+                ).await()
+            Log.d("HederaUtils", "Synced token info for property $propertyId: totalTokens=$totalSupply, tokensSold=$tokensSold")
+        } catch (e: Exception) {
+            Log.e("HederaUtils", "Failed to sync token info for $propertyId: ${e.message}", e)
             throw e
         }
     }

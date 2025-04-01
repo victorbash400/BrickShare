@@ -1,5 +1,11 @@
 package com.example.brickshare.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.core.*
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.with
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,6 +19,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -31,7 +39,7 @@ import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun BrowseScreen(navController: NavController) {
     var viewMode by remember { mutableStateOf("list") }
@@ -48,14 +56,15 @@ fun BrowseScreen(navController: NavController) {
                 .let { q ->
                     if (searchQuery.isNotEmpty()) {
                         q.whereGreaterThanOrEqualTo("metadata.address", searchQuery)
-                            .whereLessThanOrEqualTo("metadata.address", searchQuery + "\uf8ff")
-                    } else q
+                            .whereLessThanOrEqualTo("metadata.address", "$searchQuery\uf8ff")
+                    } else {
+                        q // No filtering when search is empty, fetch all properties
+                    }
                 }
             when (sortOption) {
                 "Price: Low to High" -> query.orderBy("pricePerToken")
                 "Price: High to Low" -> query.orderBy("pricePerToken", com.google.firebase.firestore.Query.Direction.DESCENDING)
                 "Newest" -> query.orderBy("propertyId", com.google.firebase.firestore.Query.Direction.DESCENDING)
-                // "ROI" -> Add if you store ROI in Firestore later
                 else -> query
             }.get()
                 .addOnSuccessListener { result ->
@@ -129,7 +138,7 @@ fun BrowseScreen(navController: NavController) {
                         onValueChange = { searchQuery = it },
                         modifier = Modifier
                             .weight(1f)
-                            .height(48.dp),
+                            .height(56.dp), // Removed shadow for cleaner look
                         placeholder = {
                             Text(
                                 "Search properties...",
@@ -145,6 +154,17 @@ fun BrowseScreen(navController: NavController) {
                                 tint = HederaGreen
                             )
                         },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { searchQuery = "" }) {
+                                    Icon(
+                                        Icons.Rounded.Clear,
+                                        contentDescription = "Clear",
+                                        tint = DeepNavy
+                                    )
+                                }
+                            }
+                        },
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -157,7 +177,7 @@ fun BrowseScreen(navController: NavController) {
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     IconButton(
-                        onClick = { /* Open filter dialog */ },
+                        onClick = { /* Open filter dialog later if needed */ },
                         modifier = Modifier
                             .size(48.dp)
                             .clip(RoundedCornerShape(12.dp))
@@ -206,7 +226,7 @@ fun BrowseScreen(navController: NavController) {
                             onDismissRequest = { expanded = false },
                             modifier = Modifier.background(Color.White)
                         ) {
-                            listOf("Newest", "Price: Low to High", "Price: High to Low", "ROI").forEach { option ->
+                            listOf("Newest", "Price: Low to High", "Price: High to Low").forEach { option ->
                                 DropdownMenuItem(
                                     text = {
                                         Text(
@@ -227,10 +247,15 @@ fun BrowseScreen(navController: NavController) {
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                if (viewMode == "list") {
-                    PropertyListView(navController, properties)
-                } else {
-                    PropertyMapView()
+                AnimatedContent(
+                    targetState = viewMode,
+                    transitionSpec = { fadeIn() with fadeOut() }
+                ) { mode ->
+                    if (mode == "list") {
+                        PropertyListView(navController, properties)
+                    } else {
+                        PropertyMapView(properties)
+                    }
                 }
             }
         }
@@ -268,13 +293,13 @@ fun PropertyListView(navController: NavController, properties: List<Map<String, 
     LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         items(properties) { property ->
             val address = (property["metadata"] as? Map<*, *>)?.get("address") as? String ?: "Unknown"
-            val pricePerShare = "$${property["pricePerToken"] ?: 0}/share"
-            val roi = "N/A" // Add ROI field to Firestore if needed
+            val pricePerShare = "${property["pricePerToken"] ?: 0} HBAR/share"
+            val roi = "N/A" // ROI not included as before
             PropertyCard(
                 address = address,
                 pricePerShare = pricePerShare,
                 roi = roi,
-                onClick = { navController.navigate("buy_shares/${property["propertyId"]}") } // Link to BuySharesScreen
+                onClick = { navController.navigate("buy_shares/${property["propertyId"]}") }
             )
         }
     }
@@ -349,50 +374,96 @@ fun PropertyCard(
 }
 
 @Composable
-fun PropertyMapView() {
+fun PropertyMapView(properties: List<Map<String, Any>>) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(BuildingBlocksWhite),
+            .background(BuildingBlocksWhite), // Clean white background
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = "Map View (Placeholder)",
-            fontFamily = BrickShareFonts.Halcyon,
-            fontSize = 20.sp,
-            color = DeepNavy.copy(alpha = 0.7f),
-            textAlign = TextAlign.Center
+        // Mock map background with subtle gradient
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(Color.White, HederaGreen.copy(alpha = 0.05f)),
+                        start = androidx.compose.ui.geometry.Offset(0f, 0f),
+                        end = androidx.compose.ui.geometry.Offset(1000f, 1000f)
+                    )
+                )
         )
-        Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-            PropertyPin(Modifier.offset(x = 100.dp, y = 150.dp))
-            PropertyPin(Modifier.offset(x = 200.dp, y = 100.dp))
-            PropertyPin(Modifier.offset(x = 150.dp, y = 250.dp))
+
+        // Property pins
+        properties.forEachIndexed { index, property ->
+            val offsetX = (index * 50 + 50).dp
+            val offsetY = (index * 70 + 100).dp
+            PropertyPin(
+                modifier = Modifier.offset(x = offsetX, y = offsetY),
+                label = (property["metadata"] as? Map<*, *>)?.get("address") as? String ?: "Property $index"
+            )
         }
+
+        // Zoom controls (mock)
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp)
+                .shadow(4.dp, RoundedCornerShape(8.dp))
+                .background(Color.White),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            IconButton(onClick = { /* Zoom in */ }, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Rounded.Add, contentDescription = "Zoom In", tint = DeepNavy)
+            }
+            IconButton(onClick = { /* Zoom out */ }, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Rounded.Remove, contentDescription = "Zoom Out", tint = DeepNavy)
+            }
+        }
+
+        // Map placeholder text
+        Text(
+            text = "Map View (Preview)",
+            fontFamily = BrickShareFonts.Halcyon,
+            fontSize = 16.sp,
+            color = DeepNavy.copy(alpha = 0.5f),
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 16.dp)
+        )
     }
 }
 
 @Composable
-fun PropertyPin(modifier: Modifier = Modifier) {
-    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+fun PropertyPin(modifier: Modifier = Modifier, label: String) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             modifier = Modifier
-                .size(12.dp)
+                .size(36.dp)
                 .clip(CircleShape)
-                .background(DeepNavy.copy(alpha = 0.2f))
-                .offset(y = 1.dp)
-        )
-        Box(
-            modifier = Modifier
-                .size(24.dp)
-                .clip(CircleShape)
-                .background(HederaGreen),
+                .background(HederaGreen.copy(alpha = 0.9f))
+                .border(2.dp, Color.White, CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = Icons.Rounded.Home,
+                Icons.Rounded.Home,
                 contentDescription = "Property",
                 tint = Color.White,
-                modifier = Modifier.size(14.dp)
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        Box(
+            modifier = Modifier
+                .padding(top = 4.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(Color.White)
+                .padding(horizontal = 6.dp, vertical = 2.dp)
+        ) {
+            Text(
+                text = label,
+                fontFamily = BrickShareFonts.Halcyon,
+                fontSize = 12.sp,
+                color = DeepNavy,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
         }
     }
